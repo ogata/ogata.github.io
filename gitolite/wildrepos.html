@@ -1,11 +1,22 @@
 <!doctype html>
 <html>
 <head>
+<meta charset="UTF-8">
+<style>
+pre { background-color: lavender; padding: 5pt; }
+</style
 </head>
-<h1>ワイルドカード リポジトリ</h1>
+<h1>gitolite のワイルドカード リポジトリ</h1>
+
+<p>ワイルドカード リポジトリのことをパーソナル リポジトリとも呼ぶ？</p>
+
 ワイルドカード リポジトリ機能を使うと、利用者に自由に使ってもらう領域を定義できるようだ。
 
+<h2>設定の書き方</h2>
+
+<p>
 conf/gitolite.conf ファイルに以下を追記。
+</p>
 
 <pre><code>repo user/CREATOR/[a-z].*
   C = alice bob carol
@@ -14,13 +25,17 @@ conf/gitolite.conf ファイルに以下を追記。
   R   = READERS
 </code></pre>
 
+<p>
 一行目の CREATOR はこれからリポジトリを作ろうとするアカウントの名前に置き換わる。
-
 三行目の CREATOR はリポジトリを作ったアカウントの名前に置き換わる。それぞれのリポジトリをだれが作ったかを gitolite は記憶している、とのことである。
-
 上記例だと alice bob carol の三名がリポジトリ新規作成できる。そして、リポジトリを作った人はそのリポジトリに対して RW+ な権限を持つ。
+</p>
 
+<h2>設定を書いた後、リポジトリを作るには</h2>
+
+<p>
 リポジトリを作るにはクローンすればよい。
+</p>
 
 <pre><code>[alice@cent7b alice]$ git clone git@54.64.219.176:user/alice/my1
 Cloning into 'my1'...
@@ -28,9 +43,11 @@ Initialized empty Git repository in /home/git/repositories/user/alice/my1.git/
 warning: You appear to have cloned an empty repository.
 </code></pre>
 
+<h2>設定に書いた READERS とか WRITERS とか</h2>
+
 READERS とか WRITERS って何よ？
 
-リポジトリごとに定義する変数？のようなものっぽい。
+リポジトリごとに定義する変数？のようなものっぽい。perms コマンド？をを使うと、それらを活用できる。
 
 <pre><code>[alice@cent7b my1]$ ssh git@54.64.219.176 perms -l user/alice/my1
 [alice@cent7b my1]$ ssh git@54.64.219.176 perms user/alice/my1 + READERS @all
@@ -54,12 +71,12 @@ hello bob, this is git@ip-172-31-4-226 running gitolite3 v3.6.2-4-g2471e18 on gi
      C  user/CREATOR/[a-z].*
  R W    testing
  R W    testing2
- R W    user/alice/my1
+ R W    user/alice/my1 ★
 Connection to 54.64.219.176 closed.
 </code></pre>
 
 <ul>
-<li> bob が持つ権限を調べてみる・・・ user/alice/my1 に RW をもつ。
+<li> bob が持つ権限を調べてみた・・・ user/alice/my1 に RW をもつことがわかる。
 </ul>
 
 <pre><code>[carol@cent7b ~]$ ssh git@54.64.219.176
@@ -69,13 +86,13 @@ hello carol, this is git@ip-172-31-4-226 running gitolite3 v3.6.2-4-g2471e18 on 
      C  user/CREATOR/[a-z].*
  R W    testing
  R W    testing2
- R      user/alice/my1
+ R      user/alice/my1 ★
 Connection to 54.64.219.176 closed.
 </code></pre>
 
 
 <ul>
-<li> carol が持つ権限を調べてみる・・・ user/alice/my1 に R をもつ。W は無い。
+<li> carol が持つ権限を調べてみた・・・ user/alice/my1 に R をもつが W が無いことがわかる。
 </ul>
 
 
