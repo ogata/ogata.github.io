@@ -1,0 +1,735 @@
+<!doctype html>
+<html>
+<head>
+<style>
+pre.cmd { background-color: lavender; padding: 5pt; }
+</style>
+<title>conntrack-tools を試す</title>
+</head>
+
+<h1>conntrack-tools を試す</h1>
+
+<p>以前、<a href='http://www.linuxvirtualserver.org/docs/sync.html'>IPVS Connection Synchronization</a> を<a href='http://blog.livedoor.jp/aspplus/archives/51876308.html'>試した</a>ので、今回は <a href='http://conntrack-tools.netfilter.org/'>conntrack-tools</a> の Connection Synchronization を試してみた。意味が分かっていない項目も多いので、このページに書いてあることを真似する際は要注意。</p>
+
+<ul>
+<li><a href='#mokuteki'>目的</a></li>
+<li><a href='#matome'>まとめ</a></li>
+<li><a href='#kousei'>構成</a></li>
+<li><a href='#install'>インストールするパッケージなど</a></li>
+<li><a href='#check'>FW にて conntrack-tools の動作条件をチェック</a></li>
+<li><a href='#build'>FW 一号機にて conntrack-tools をビルド</a></li>
+<li><a href='#copy'>FW 一号機から二号機へ必要なものをコピー</a></li>
+<li><a href='#fw-selinux'>FW の SELinux</a></li>
+<li><a href='#fw-keepalived'>FW の keepalived</a></li>
+<li><a href='#fw-conntrackd'>FW の conntrackd</a></li>
+<li><a href='#fw-routes'>FW の static routes</a></li>
+<li><a href='#fw-iptables'>FW の iptables</a></li>
+<li><a href='#lb-selinux'>LB の SELinux</a></li>
+<li><a href='#lb-keepalived'>LB の keepalived</a></li>
+<li><a href='#cent7m-iptables'>cent7m の iptables</a></li>
+<li><a href='#sanko'>参考</a></li>
+<li><a href='#rireki'>更新履歴</a></li>
+</ul>
+
+<h2 id='mokuteki'>目的</h2>
+
+<ul>
+<li>LB を導入することで、サービス提供ホストをサービス利用者に知られることなくメンテナンスできるようになった。
+<li>LB 二台にてコネクション情報を同期できるようになったので、LB もサービス利用者に知られることなくメンテナンスできるようになった。←前回の話<li>FW もサービス利用者に知られることなくメンテナンスできるようにするよ。←今回の話
+</ul>
+
+<h2 id='matome'>まとめ</h2>
+<p>ホストの OS はいずれも CentOS 7.1 を使用した。</p>
+<p>conntrack-tools と IPVS Connection Synchronization は使いどころが異なるので比較表の形式でまとめるのは不適切な気がするけど、まあいいや。</p>
+<table border='1'>
+<tr>
+<th></th>
+<th>conntrack-tools</th>
+<th>IPVS Connection Synchronization</th>
+</tr>
+<tr>
+<th>適用場所</th>
+<td>FW</td>
+<td>LB</td>
+</tr>
+<tr>
+<th>インストールの容易さ</th>
+<td>自分でビルドする必要あり</td>
+<td>yum で簡単にインストールできる</td>
+</tr>
+<tr>
+<th>SELinux 対策</th>
+<td>難しい。無理やり色々書いて乗り切った</td>
+<td>setsebool を一回叩いて解決</td>
+</tr>
+<tr style='background-color: yellow'>
+<th>コネクション情報の同期</th>
+<td>同期しているようだ (*2)</td>
+<td>イベントを通知しているだけのようだ (*1)</td>
+</tr>
+</table>
+
+<p>(*1) IPVS のコネクション同期はイベントを通知しているだけらしく、LB 再起動時の挙動に難があった。そのあたりの説明は<a href='http://blog.livedoor.jp/aspplus/archives/51876308.html'>こちら</a>を参照。</p>
+
+<p>(*2) conntrack-tools のコネクション同期は FW 一号機と二号機が持つ情報の差分を検出して不足分を同期しているのかもしれない。<span style='background-color: yellow'>FW を再起動しても情報は欠損せず引き継がれる。</span>素晴らしい。</p>
+
+<h2 id='kousei'>構成</h2>
+<a href='hosts.PNG'><img src='hosts.PNG' border='1' width='800'/></a>
+<p>図の左上に存在する cent7i と cent7j が firewall で、今回はここに注目。いずれも NIC を三つ持つ。192.168.0.0/24 が表側で、192.168.1.0/24 は裏側。192.168.3.0/24 は iptables の情報を cent7i と cent7j で同期するために使う。</p>
+<p>図の中央に存在する cent7g と cent7h は load balancer である。</p>
+<p>load balancer の振り分け先は cent7a と cent7b で、postfix を動作させている。</p>
+<p>cent7d には背景水色で vsftpd と書いてあるが試してはいない。</p>
+<p>図の右側。動作確認用に cent7m, cent7k cent7c を用意した。</p>
+
+
+
+
+<h2 id='install'>インストールするパッケージなど</h2>
+
+<table border='1'>
+<tr>
+<th rowspan='2'>package もしくは操作</th>
+<th colspan='2'>firewall</th>
+<th colspan='2'>load balancer</th>
+<th>firewall</th>
+</tr>
+<tr>
+<th>cent7i</th>
+<th>cent7j</th>
+<th>cent7g</th>
+<th>cent7h</th>
+<th>cent7m</th>
+</tr>
+<tr>
+<td>deltarpm</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>bash-completion</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>bind-utils</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>screen</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>tcpdump</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>telnet</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>vim</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+</table>
+
+<p>好みに応じて、deltarpm や vim 等をインストールする。</p>
+
+<table border='1'>
+<tr>
+<th rowspan='2'>package もしくは操作</th>
+<th colspan='2'>firewall</th>
+<th colspan='2'>load balancer</th>
+<th>firewall</th>
+</tr>
+<tr>
+<th>cent7i</th>
+<th>cent7j</th>
+<th>cent7g</th>
+<th>cent7h</th>
+<th>cent7m</th>
+</tr>
+<tr>
+<td>firewalld の stop と mask</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>net.ipv4.ip_forward = 1</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+</table>
+
+<p>上記の二つは必須。</p>
+
+<table border='1'>
+<tr>
+<th rowspan='2'>package もしくは操作</th>
+<th colspan='2'>firewall</th>
+<th colspan='2'>load balancer</th>
+<th>firewall</th>
+</tr>
+<tr>
+<th>cent7i</th>
+<th>cent7j</th>
+<th>cent7g</th>
+<th>cent7h</th>
+<th>cent7m</th>
+</tr>
+<tr>
+<td>iptables-services</td>
+<td>yes</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>gcc-c++</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>bzip2</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>bison</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>flex</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libnfnetlink-devel</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libnetfilter_conntrack-devel</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libmnl-devel</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libnetfilter_queue-devel</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>keepalived</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td></td>
+</tr>
+<tr>
+<td>selinux-policy-devel</td>
+<td>yes</td>
+<td>[*1]</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libnetfilter_queue</td>
+<td>[*2]</td>
+<td>yes</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</table>
+
+<p>firewalld を通さず、iptables を直接使いたいから iptables-services をインストール。</p>
+<p>CentOS 7.1 には conntrack-tools はパッケージ化されていないから自分でビルドする必要がある。gcc-c++ から libnetfilter_queue-devel はそのためにインストール。</p>
+<p>HA を組むため、keepalived をインストール。</p>
+<p>ipvsadm パッケージは不要だから表には記載していない。動作確認のために ipvsadm コマンドを使いたいならインストールすべし。</p>
+<p>[*1] 一号機で生成した mypolicy.pp を二号機にコピーするなら (二号機で make しないなら) インストール不要だと思う。</p>
+<p>[*2] 明示的にインストールしていないが、他のパッケージの依存でインストールされていた。</p>
+
+<h2 id='check'>FW にて conntrack-tools の動作条件をチェック</h2>
+
+<pre class='cmd'><code>[root@cent7i ~]# grep -w CONFIG_NF_CONNTRACK /boot/config-$( uname -r )
+CONFIG_NF_CONNTRACK=m
+[root@cent7i ~]# grep -w CONFIG_NF_CONNTRACK_IPV4 /boot/config-$( uname -r )
+CONFIG_NF_CONNTRACK_IPV4=m
+[root@cent7i ~]# grep -w CONFIG_NETFILTER_NETLINK /boot/config-$( uname -r )
+CONFIG_NETFILTER_NETLINK=m
+[root@cent7i ~]# grep -w CONFIG_NF_CT_NETLINK /boot/config-$( uname -r )
+CONFIG_NF_CT_NETLINK=m
+[root@cent7i ~]# grep -w CONFIG_NF_CONNTRACK_EVENTS /boot/config-$( uname -r )
+CONFIG_NF_CONNTRACK_EVENTS=y
+[root@cent7i ~]#
+</code></pre>
+
+<h2 id='build'>FW 一号機にて conntrack-tools をビルド</h2>
+
+<pre class='cmd'><code>[root@cent7i ~]# cd /usr/local/src/
+[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/conntrack-tools/files/conntrack-tools-1.4.3.tar.bz2
+[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/conntrack-tools/files/conntrack-tools-1.4.3.tar.bz2.sig
+[root@cent7i src]# curl -sSO http://www.netfilter.org/files/coreteam-gpg-key-BB5F58CC.txt
+[root@cent7i src]# gpg --import coreteam-gpg-key-BB5F58CC.txt
+[root@cent7i src]# gpg --verify conntrack-tools-1.4.3.tar.bz2.sig conntrack-tools-1.4.3.tar.bz2
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/libnetfilter_cttimeout/files/libnetfilter_cttimeout-1.0.0.tar.bz2
+[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/libnetfilter_cttimeout/files/libnetfilter_cttimeout-1.0.0.tar.bz2.sig
+[root@cent7i src]# gpg --verify libnetfilter_cttimeout-1.0.0.tar.bz2.sig libnetfilter_cttimeout-1.0.0.tar.bz2
+[root@cent7i src]# tar xf libnetfilter_cttimeout-1.0.0.tar.bz2
+[root@cent7i src]# cd libnetfilter_cttimeout-1.0.0/
+[root@cent7i libnetfilter_cttimeout-1.0.0]# ./configure
+[root@cent7i libnetfilter_cttimeout-1.0.0]# make 
+[root@cent7i libnetfilter_cttimeout-1.0.0]# make install
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7i libnetfilter_cttimeout-1.0.0]# cd /usr/local/src/
+[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/libnetfilter_cthelper/files/libnetfilter_cthelper-1.0.0.tar.bz2
+[root@cent7i src]# curl -sSO http://www.netfilter.org/projects/libnetfilter_cthelper/files/libnetfilter_cthelper-1.0.0.tar.bz2.sig
+[root@cent7i src]# gpg --verify libnetfilter_cthelper-1.0.0.tar.bz2.sig libnetfilter_cthelper-1.0.0.tar.bz2
+[root@cent7i src]# tar xf libnetfilter_cthelper-1.0.0.tar.bz2
+[root@cent7i src]# cd libnetfilter_cthelper-1.0.0
+[root@cent7i libnetfilter_cthelper-1.0.0]# ./configure
+[root@cent7i libnetfilter_cthelper-1.0.0]# make
+[root@cent7i libnetfilter_cthelper-1.0.0]# make install
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7i libnetfilter_cthelper-1.0.0]# cd /usr/local/src/
+[root@cent7i src]# tar xf conntrack-tools-1.4.3.tar.bz2
+[root@cent7i src]# cd conntrack-tools-1.4.3/
+[root@cent7i conntrack-tools-1.4.3]# PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/ ./configure
+[root@cent7i conntrack-tools-1.4.3]# make
+[root@cent7i conntrack-tools-1.4.3]# make install
+</code></pre>
+
+<h2 id='copy'>FW 一号機から二号機へ必要なものをコピー</h2>
+
+<pre class='cmd'><code>[root@cent7i ~]# tar cf - /usr/local/sbin/conntrack /usr/local/sbin/conntrackd /usr/local/sbin/nfct | ssh cent7j 'tar xf - -C /'
+tar: Removing leading `/' from member names
+[root@cent7i ~]# tar cf - /usr/local/lib | ssh cent7j 'tar xf - -C /'
+tar: Removing leading `/' from member names
+</code></pre>
+
+<p>SELinux の属性はコピーできていないかもしれないが、動作に問題は無い。</p>
+
+<h2 id='fw-selinux'>FW の SELinux</h2>
+
+<p>色々少しずつ書き足して解決。自分が書いたことを理解できていない。</p>
+
+<pre class='cmd'><code>[root@cent7i policy]# md5sum mypolicy.te
+ead3fcc040631dee4f752b7730f55adb  mypolicy.te
+[root@cent7i policy]# cat mypolicy.te
+
+module mypolicy 1.0;
+
+require {
+        type kernel_t;
+        type var_lock_t;
+        type keepalived_t;
+        type var_run_t;
+        type unreserved_port_t;
+        class lnk_file read;
+        class dir write;
+        class dir add_name;
+        class dir remove_name;
+        class file create;
+        class file { read open };
+        class capability sys_nice;
+        class process setsched;
+        class file unlink;
+        class sock_file create;
+        class sock_file write;
+        class sock_file unlink;
+        class udp_socket name_bind;
+        class unix_stream_socket connectto;
+        class system module_request;
+}
+
+#============= keepalived_t ==============
+allow keepalived_t var_lock_t:lnk_file read;
+allow keepalived_t var_lock_t:dir write;
+allow keepalived_t var_lock_t:dir add_name;
+allow keepalived_t var_lock_t:file create;
+allow keepalived_t var_lock_t:file { read open };
+allow keepalived_t var_lock_t:dir remove_name;
+allow keepalived_t self:capability sys_nice;
+allow keepalived_t self:process setsched;
+allow keepalived_t var_lock_t:file unlink;
+allow keepalived_t var_run_t:sock_file create;
+allow keepalived_t unreserved_port_t:udp_socket name_bind;
+allow keepalived_t var_run_t:sock_file write;
+allow keepalived_t self:unix_stream_socket connectto;
+allow keepalived_t var_run_t:sock_file unlink;
+allow keepalived_t kernel_t:system module_request;
+[root@cent7i policy]#
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7i policy]# make -f /usr/share/selinux/devel/Makefile mypolicy.pp
+[root@cent7i policy]# semodule -i mypolicy.pp
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7j policy]# make -f /usr/share/selinux/devel/Makefile mypolicy.pp
+[root@cent7j policy]# semodule -i mypolicy.pp
+</code></pre>
+
+<h2 id='fw-keepalived'>FW の keepalived</h2>
+
+<pre class='cmd'><code>[root@cent7i keepalived]# md5sum keepalived.conf
+a6a679fa1f6ac5a361c4cfc2376eab5a  keepalived.conf
+[root@cent7i keepalived]# cat keepalived.conf
+#
+# Simple script for primary-backup setups
+#
+
+vrrp_sync_group G1 {   # must be before vrrp_instance declaration
+  group {
+    VI_1
+    VI_2
+  }
+  notify_master "/etc/conntrackd/primary-backup.sh primary"
+  notify_backup "/etc/conntrackd/primary-backup.sh backup"
+  notify_fault "/etc/conntrackd/primary-backup.sh fault"
+}
+
+vrrp_instance VI_1 {
+    interface enp0s3
+    state SLAVE
+    virtual_router_id 61
+    priority 80
+    advert_int 3
+    virtual_ipaddress {
+        192.168.0.40/24 brd 192.168.0.255
+        192.168.0.60/24 brd 192.168.0.255
+        192.168.0.88/24 brd 192.168.0.255
+    }
+}
+
+vrrp_instance VI_2 {
+    interface enp0s8
+    state SLAVE
+    virtual_router_id 62
+    priority 80
+    advert_int 3
+    virtual_ipaddress {
+        192.168.1.40/24 brd 192.168.1.255
+    }
+}
+[root@cent7i keepalived]#
+</code></pre>
+
+<h2 id='fw-conntrackd'>FW の conntrackd</h2>
+
+<pre class='cmd'><code>[root@cent7i conntrackd]# md5sum primary-backup.sh
+646a3c5a1f909fa09581e400ca99d335  primary-backup.sh
+[root@cent7i conntrackd]# diff -u /usr/local/src/conntrack-tools-1.4.3/doc/sync/primary-backup.sh primary-backup.sh
+--- /usr/local/src/conntrack-tools-1.4.3/doc/sync/primary-backup.sh     2013-02-25 07:23:57.000000000 +0900
++++ primary-backup.sh   2015-10-18 21:11:39.642000000 +0900
+@@ -19,7 +19,7 @@
+ # Contributions to improve this script are welcome :).
+ #
+
+-CONNTRACKD_BIN=/usr/sbin/conntrackd
++CONNTRACKD_BIN=/usr/local/sbin/conntrackd
+ CONNTRACKD_LOCK=/var/lock/conntrack.lock
+ CONNTRACKD_CONFIG=/etc/conntrackd/conntrackd.conf
+
+[root@cent7i conntrackd]#
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7i conntrackd]# md5sum conntrackd.conf
+33cf299cc988e52e9bf067461ec9fc81  conntrackd.conf
+[root@cent7i conntrackd]# cat conntrackd.conf
+Sync {
+        Mode FTFW {
+        }
+        UDP {
+                IPv4_address 192.168.3.41
+                IPv4_Destination_Address 192.168.3.42
+                Port 3780
+                Interface enp0s9
+                SndSocketBuffer 1249280
+                RcvSocketBuffer 1249280
+                Checksum on
+        }
+}
+General {
+        Nice -20
+        HashSize 32768
+        HashLimit 131072
+        LogFile off
+        Syslog on
+        LockFile /var/lock/conntrack.lock
+        UNIX {
+                Path /var/run/conntrackd.ctl
+                Backlog 20
+        }
+        NetlinkBufferSize 2097152
+        NetlinkBufferSizeMaxGrowth 8388608
+        Filter From Userspace {
+                Protocol Accept {
+                        TCP
+                        UDP
+                        ICMP # This requires a Linux kernel >= 2.6.31
+                }
+                Address Ignore {
+                        IPv4_address 127.0.0.1
+                        IPv4_address 192.168.0.41
+                        IPv4_address 192.168.1.41
+                        IPv4_address 192.168.3.41
+                }
+        }
+}
+[root@cent7i conntrackd]#
+</code></pre>
+
+<pre class='cmd'><code>[root@cent7j conntrackd]# diff -u <( ssh cent7i cat /etc/conntrackd/conntrackd.conf ) conntrackd.conf
+--- /dev/fd/63  2015-10-24 21:15:31.024000000 +0900
++++ conntrackd.conf     2015-10-18 21:13:52.806000000 +0900
+@@ -2,8 +2,8 @@
+        Mode FTFW {
+        }
+        UDP {
+-               IPv4_address 192.168.3.41
+-               IPv4_Destination_Address 192.168.3.42
++               IPv4_address 192.168.3.42
++               IPv4_Destination_Address 192.168.3.41
+                Port 3780
+                Interface enp0s9
+                SndSocketBuffer 1249280
+@@ -32,9 +32,9 @@
+                }
+                Address Ignore {
+                        IPv4_address 127.0.0.1
+-                       IPv4_address 192.168.0.41
+-                       IPv4_address 192.168.1.41
+-                       IPv4_address 192.168.3.41
++                       IPv4_address 192.168.0.42
++                       IPv4_address 192.168.1.42
++                       IPv4_address 192.168.3.42
+                }
+        }
+ }
+[root@cent7j conntrackd]#
+</code></pre>
+
+<h2 id='fw-routes'>FW の static routes</h2>
+
+<pre class='cmd'><code>nmcli connection modify enp0s8 +ipv4.routes '192.168.2.0/24 192.168.1.50'
+</code></pre>
+
+<h2 id='fw-iptables'>FW の iptables</h2>
+
+<pre class='cmd'><code>[root@cent7j ~]# md5sum iptables-cent7i-cent7j.sh
+7c46273ae0a5843642b04c66af1fc692  iptables-cent7i-cent7j.sh
+[root@cent7j ~]# cat iptables-cent7i-cent7j.sh
+#!/bin/bash
+
+set -e
+set -u
+
+iptables -t nat -F
+iptables -t nat -A PREROUTING -i enp0s3 -p tcp -d 192.168.0.60 --dport 25 -j DNAT --to-destination 192.168.1.60
+iptables -t nat -A PREROUTING -i enp0s3 -p tcp -d 192.168.0.88 --dport 3389 -j DNAT --to-destination 192.168.2.88
+iptables -t nat -A POSTROUTING -o enp0s3 -p tcp -s 192.168.2.61 --dport 25 -j SNAT --to-source 192.168.0.60
+iptables -t nat -A POSTROUTING -o enp0s3 -p tcp -s 192.168.2.62 --dport 25 -j SNAT --to-source 192.168.0.60
+iptables -t nat -A POSTROUTING -o enp0s3 -s 192.168.1.0/24 -j SNAT --to-source 192.168.0.40
+iptables -t nat -A POSTROUTING -o enp0s3 -s 192.168.2.0/24 -j SNAT --to-source 192.168.0.40
+echo done1
+
+iptables -F
+iptables -P FORWARD DROP
+iptables -A FORWARD -m state --state ESTABLISHED -j ACCEPT
+iptables -A FORWARD -i enp0s3 -p tcp -d 192.168.1.60 --dport 25 -j ACCEPT
+iptables -A FORWARD -i enp0s3 -p tcp -d 192.168.2.88 --dport 3389 -j ACCEPT
+iptables -A FORWARD -i enp0s8 -s 192.168.1.0/24 -j ACCEPT
+iptables -A FORWARD -i enp0s8 -s 192.168.2.0/24 -j ACCEPT
+iptables -A FORWARD -j LOG --log-prefix 'DROPPED ' --log-level info
+echo done2
+
+[root@cent7j ~]#
+</code></pre>
+
+
+<h2 id='lb-selinux'>LB の SELinux</h2>
+
+<pre class='cmd'><code>setsebool -P domain_kernel_load_modules on
+</code></pre>
+
+<h2 id='lb-keepalived'>LB の keepalived</h2>
+
+<pre class='cmd'><code>[root@cent7g ~]# md5sum /etc/keepalived/keepalived.conf
+7f92ce227724e11993bba494a1dc8d77  /etc/keepalived/keepalived.conf
+[root@cent7g ~]# cat /etc/keepalived/keepalived.conf
+vrrp_sync_group group500 {
+  group {
+    instance51
+    instance52
+  }
+}
+
+vrrp_instance instance51 {
+  state BACKUP
+  nopreempt
+  interface enp0s3
+  virtual_router_id 51
+  priority 100
+  advert_int 1
+  virtual_ipaddress {
+    192.168.1.50/24 brd 192.168.1.255
+    192.168.1.60/24 brd 192.168.1.255
+  }
+}
+
+vrrp_instance instance52 {
+  state BACKUP
+  nopreempt
+  interface enp0s8
+  virtual_router_id 52
+  priority 100
+  advert_int 1
+  virtual_ipaddress {
+    192.168.2.50/24 brd 192.168.2.255
+  }
+  lvs_sync_daemon_interface enp0s8
+}
+
+virtual_server_group SMTP {
+  192.168.1.60 25
+}
+
+virtual_server group SMTP {
+  delay_loop 10
+  lb_algo lc
+  lb_kind NAT
+  protocol TCP
+  real_server 192.168.2.61 25 {
+    weight 1
+    inhibit_on_failure
+    SMTP_CHECK {
+      connect_timeout 15
+      retry 2
+      delay_before_retry 6
+    }
+  }
+  real_server 192.168.2.62 25 {
+    weight 1
+    inhibit_on_failure
+    SMTP_CHECK {
+      connect_timeout 15
+      retry 2
+      delay_before_retry 6
+    }
+  }
+}
+[root@cent7g ~]#
+</code></pre>
+
+<h2 id='cent7m-iptables'>cent7m の iptables</h2>
+
+<pre class='cmd'><code>[root@cent7m ~]# md5sum iptables-cent7m.sh
+7caccd426d5c08e4303eeb451a320cf6  iptables-cent7m.sh
+[root@cent7m ~]# cat iptables-cent7m.sh
+#!/bin/bash
+
+set -e
+set -u
+
+iptables -t nat -F
+iptables -t nat -A PREROUTING -i enp0s3 -p tcp -d 192.168.0.202 --dport 25 -j DNAT --to-destination 192.168.9.202
+iptables -t nat -A POSTROUTING -o enp0s3 -p tcp -s 192.168.9.202 --dport 25 -j SNAT --to-source 192.168.0.202
+iptables -t nat -A POSTROUTING -o enp0s3 -s 192.168.9.0/24 -j SNAT --to-source 192.168.0.201
+echo done1
+
+iptables -F
+iptables -P FORWARD DROP
+iptables -A FORWARD -m state --state ESTABLISHED -j ACCEPT
+iptables -A FORWARD -i enp0s3 -p tcp --dport 25 -d 192.168.9.202 -j ACCEPT
+iptables -A FORWARD -i enp0s8 -s 192.168.9.0/24 -j ACCEPT
+iptables -A FORWARD -j LOG --log-prefix 'DROPPED ' --log-level info
+echo done2
+[root@cent7m ~]#
+</code></pre>
+
+
+<h2 id='sanko'>参考</h2>
+<ul>
+<li><a href='http://backreference.org/2013/04/03/firewall-ha-with-conntrackd-and-keepalived/'>Firewall HA with conntrackd and keepalived « \1</a></li>
+<li><a href='http://www.linuxjournal.com/article/10964'>Build a Better Firewall-Linux HA Firewall Tutorial | Linux Journal</a></li>
+<li><a href='http://blog.easter-eggs.org/index.php/post/2013/12/11/Active/Backup-iptables-tracking-connexions-between-two-gateway'>Active/Backup iptables tracking connexions between two gateway - Le blog des salariés</a></li>
+<li>man 8 keepalived_selinux</li>
+<li><a href='http://www.slideshare.net/ishikawa84g/hbstudy-28-selinuxhandson'>hbstudy# 28 SELinux HandsOn 公開版</a></li>
+<li><a href='http://wankomagic.hatenablog.com/entry/2013/05/02/012203'>SELinuxのポリシー・モジュールを自作する - わんこいん</a></li>
+</ul>
+
+<h2 id='rireki'>更新履歴</h2>
+
+<ul>
+<li>2015/10/24 新規作成</li>
+</ul>
+
+</html>
