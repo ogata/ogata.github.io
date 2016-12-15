@@ -1,0 +1,803 @@
+<!doctype html>
+<html>
+<head>
+<title>GRE Tunnel Protected with IPsec の練習</title>
+<style>
+pre.cmd { background-color: lavender; padding: 5pt; }
+</style>
+</head>
+<body>
+<h1>GRE Tunnel Protected with IPsec の練習</h1>
+<p><a href='https://groups.google.com/forum/#!topic/vyos-users-jp/kZ5mCOQywnY'>到達性が失われた際に、アクションを起こしたい - Google グループ</a> が動機。</p>
+
+<pre class='cmd'><code>            --------------------------  network6
+                |                |
+                |                |
+            +-------+        +-------+
+            | vyos3 |        | vyos4 |
+            +-------+        +-------+
+           eth0 |           eth0 |
+                |                |
+network4   -------------      ---------------- network5
+                    |                    |
+                    |                    |
+            ..................................
+            ...  インターネット            ...
+            ..................................
+                    |                    |
+                    |                    |
+network2   -------------      ---------------- network3
+                |                |
+           eth0 |           eth0 |
+            +-------+        +-------+
+            | vyos1 |        | vyos2 |
+            +-------+        +-------+
+           eth1 |           eth1 |
+                |    VIP         |
+            --------------------------  network1
+
+上の図では表現していませんが、vyos1 と vyos3 の間を VPN 接続し、vyos2 と vyos4 の間も VPN 接続しています。
+
+vyos1 と vyos2 の network1 側に VRRP を設定し、通常は vyos1 の eth1 が VIP を持ちます。
+
+・vyos1 と vyos3 間が切れたことを検出した場合に VIP を vyos2 の eth1 に移動させたい。
+・もしくは、vyos1 と vyos3 間がつながっている場合に限り、network6 への route を存在させたい。
+（vyos1 と vyos3 間が切れた場合は、network6 への route を消し、復旧した際には、route を復活させたい）
+</code></pre>
+
+<p>手法1 ⇒ <a href='http://www.slideshare.net/naotomatsumoto/unbreakable-vpntunnelingusingvyatta20140513v5'>Unbreakable VPN using Vyatta/VyOS - HOW TO -</a> のようにクラスタ機能を使う。 ⇒ Vyatta リファレンスにクラスタ機能の説明が見当たらなかったので、今回はこの手法は採用せず。</p>
+<p>手法2 ⇒ <a href='https://www.seil.jp/product/solution/static.html'>Static経路自動切替</a>、<a href='http://www.seil.jp/doc/index.html#fn/route/route-static_keepalive.html'>TECHNICAL MANUAL - static経路自動切替機能</a> のような機能を使う。 ⇒ Vyatta/VyOS にこの種の機能は存在しないようだ。</p>
+<p>手法3 ⇒ <a href='http://www.brocade.com/content/html/en/administration-guide/vyatta_5400_manual/wwhelp/wwhimpl/js/html/wwhelp.htm#href=VPN_Site-to-Site%20IPsec%20VPN/IPSec%20VPN%20Configuration.3.29.html'>High Availability VPN with VRRP</a> ⇒ 中身は未確認</p>
+<p>手法4 ⇒ <a href='http://www.brocade.com/content/html/en/administration-guide/vyatta_5400_manual/wwhelp/wwhimpl/js/html/wwhelp.htm#href=VPN_Site-to-Site%20IPsec%20VPN/IPSec%20VPN%20Configuration.3.48.html'>GRE Tunnel Protected with IPsec</a> ⇒ これを試した</p>
+
+<img src='diagram2.PNG' border='1' />
+<p>VirtualBox にて仮想マシンを 15 台使用。west2 と east2 は CentOS 7 で、その他の 13 台は VyOS 1.1.7 を使用。</p>
+
+<div style='float: left;'>
+<h2>nat1</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.11.201/24
+    }
+    ethernet eth1 {
+        address 192.168.12.201/24
+    }
+    ethernet eth2 {
+        address 192.168.19.201/24
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.12.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 110 {
+            outbound-interface eth0
+            source {
+                address 192.168.13.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 120 {
+            outbound-interface eth0
+            source {
+                address 192.168.14.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 130 {
+            outbound-interface eth0
+            source {
+                address 192.168.17.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 140 {
+            outbound-interface eth0
+            source {
+                address 192.168.18.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 150 {
+            outbound-interface eth0
+            source {
+                address 192.168.19.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+        rule 160 {
+            outbound-interface eth0
+            source {
+                address 192.168.20.0/24
+            }
+            translation {
+                address 192.168.11.201
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.12.0/24
+            network 192.168.19.0/24
+        }
+        parameters {
+            router-id 1.0.0.1
+        }
+    }
+}
+system {
+    gateway-address 192.168.11.1
+    host-name nat1.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<div style='float: left;'>
+<h2>router1</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.12.101/24
+    }
+    ethernet eth1 {
+        address 192.168.13.101/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.12.0/24
+            network 192.168.13.0/24
+        }
+        parameters {
+            router-id 1.0.0.2
+        }
+    }
+}
+system {
+    gateway-address 192.168.12.201
+    host-name router1.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+
+<div style='float: left;'>
+<h2>router2</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.12.102/24
+    }
+    ethernet eth1 {
+        address 192.168.14.102/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.12.0/24
+            network 192.168.14.0/24
+        }
+        parameters {
+            router-id 1.0.0.3
+        }
+    }
+}
+system {
+    gateway-address 192.168.12.201
+    host-name router2.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<div style='float: left;'>
+<h2>router3</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.13.107/24
+    }
+    ethernet eth1 {
+        address 192.168.17.107/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.17.0/24
+            network 192.168.13.0/24
+        }
+        parameters {
+            router-id 1.0.0.4
+        }
+    }
+}
+system {
+    gateway-address 192.168.13.101
+    host-name router3.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+
+<div style='float: left;'>
+<h2>router4</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.14.108/24
+    }
+    ethernet eth1 {
+        address 192.168.17.108/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.17.0/24
+            network 192.168.14.0/24
+        }
+        parameters {
+            router-id 1.0.0.5
+        }
+    }
+}
+system {
+    gateway-address 192.168.14.102
+    host-name router4.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<div style='float: left;'>
+<h2>router5</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.19.111/24
+    }
+    ethernet eth1 {
+        address 192.168.20.111/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.19.0/24
+            network 192.168.20.0/24
+        }
+        parameters {
+            router-id 1.0.0.6
+        }
+    }
+}
+system {
+    gateway-address 192.168.19.201
+    host-name router5.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+
+<div style='float: left;'>
+<h2>router6</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.19.112/24
+    }
+    ethernet eth1 {
+        address 192.168.18.112/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.19.0/24
+            network 192.168.18.0/24
+        }
+        parameters {
+            router-id 1.0.0.7
+        }
+    }
+}
+system {
+    gateway-address 192.168.19.201
+    host-name router6.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<div style='float: left;'>
+<h2>west1</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.13.103/24
+    }
+    ethernet eth1 {
+        address 192.168.15.103/24
+        vrrp {
+            vrrp-group 99 {
+                preempt false
+                priority 100
+                virtual-address 192.168.15.1/24
+            }
+        }
+    }
+    tunnel tun0 {
+        address 10.3.4.1/30
+        description "GRE tunnel to router EAST1"
+        encapsulation gre
+        local-ip 192.168.13.103
+        multicast enable
+        remote-ip 192.168.14.104
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.0.0/16
+            }
+            translation {
+                address 192.168.13.103
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.15.0/24
+            network 10.3.4.0/30
+        }
+        parameters {
+            router-id 2.0.0.2
+        }
+    }
+}
+system {
+    gateway-address 192.168.13.101
+    host-name west1.mydomain.local
+    name-server 192.168.11.1
+}
+vpn {
+    ipsec {
+        esp-group ESP-W1 {
+            lifetime 1800
+            mode tunnel
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption 3des
+                hash md5
+            }
+        }
+        ike-group IKE-W1 {
+            lifetime 3600
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption aes128
+                hash sha1
+            }
+        }
+        ipsec-interfaces {
+            interface eth0
+        }
+        site-to-site {
+            peer 192.168.14.104 {
+                authentication {
+                    mode pre-shared-secret
+                    pre-shared-secret ****************
+                }
+                default-esp-group ESP-W1
+                ike-group IKE-W1
+                local-address 192.168.13.103
+                tunnel 1 {
+                    protocol gre
+                }
+            }
+        }
+    }
+}
+</code></pre>
+</div>
+<div style='float: left;'>
+<h2>east1</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.14.104/24
+    }
+    ethernet eth1 {
+        address 192.168.16.104/24
+        vrrp {
+            vrrp-group 99 {
+                preempt false
+                priority 100
+                virtual-address 192.168.16.1/24
+            }
+        }
+    }
+    tunnel tun0 {
+        address 10.3.4.2/30
+        description "GRE tunnel to router WEST1"
+        encapsulation gre
+        local-ip 192.168.14.104
+        multicast enable
+        remote-ip 192.168.13.103
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.0.0/16
+            }
+            translation {
+                address 192.168.14.104
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 10.3.4.0/30
+            network 192.168.16.0/24
+        }
+        parameters {
+            router-id 2.0.0.4
+        }
+    }
+}
+system {
+    gateway-address 192.168.14.102
+    host-name east1.mydomain.local
+    name-server 192.168.11.1
+}
+vpn {
+    ipsec {
+        esp-group ESP-E1 {
+            lifetime 1800
+            mode tunnel
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption 3des
+                hash md5
+            }
+        }
+        ike-group IKE-E1 {
+            lifetime 3600
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption aes128
+                hash sha1
+            }
+        }
+        ipsec-interfaces {
+            interface eth0
+        }
+        site-to-site {
+            peer 192.168.13.103 {
+                authentication {
+                    mode pre-shared-secret
+                    pre-shared-secret ****************
+                }
+                default-esp-group ESP-E1
+                ike-group IKE-E1
+                local-address 192.168.14.104
+                tunnel 1 {
+                    protocol gre
+                }
+            }
+        }
+    }
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<div style='float: left;'>
+<h2>west3</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.20.109/24
+    }
+    ethernet eth1 {
+        address 192.168.15.109/24
+        vrrp {
+            vrrp-group 99 {
+                preempt false
+                priority 100
+                virtual-address 192.168.15.1/24
+            }
+        }
+    }
+    tunnel tun0 {
+        address 10.3.3.1/30
+        description "GRE tunnel to router EAST3"
+        encapsulation gre
+        local-ip 192.168.20.109
+        multicast enable
+        remote-ip 192.168.18.110
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.0.0/16
+            }
+            translation {
+                address 192.168.20.109
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.15.0/24
+            network 10.3.3.0/30
+        }
+        parameters {
+            router-id 2.0.0.1
+        }
+    }
+}
+system {
+    gateway-address 192.168.20.111
+    host-name west3.mydomain.local
+    name-server 192.168.11.1
+}
+vpn {
+    ipsec {
+        esp-group ESP-W3 {
+            lifetime 1800
+            mode tunnel
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption 3des
+                hash md5
+            }
+        }
+        ike-group IKE-W3 {
+            lifetime 3600
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption aes128
+                hash sha1
+            }
+        }
+        ipsec-interfaces {
+            interface eth0
+        }
+        site-to-site {
+            peer 192.168.18.110 {
+                authentication {
+                    mode pre-shared-secret
+                    pre-shared-secret ****************
+                }
+                default-esp-group ESP-W3
+                ike-group IKE-W3
+                local-address 192.168.20.109
+                tunnel 1 {
+                    protocol gre
+                }
+            }
+        }
+    }
+}
+</code></pre>
+</div>
+<div style='float: left;'>
+<h2>east3</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.18.110/24
+    }
+    ethernet eth1 {
+        address 192.168.16.110/24
+        vrrp {
+            vrrp-group 99 {
+                preempt false
+                priority 100
+                virtual-address 192.168.16.1/24
+            }
+        }
+    }
+    tunnel tun0 {
+        address 10.3.3.2/30
+        description "GRE tunnel to router WEST3"
+        encapsulation gre
+        local-ip 192.168.18.110
+        multicast enable
+        remote-ip 192.168.20.109
+    }
+}
+nat {
+    source {
+        rule 100 {
+            outbound-interface eth0
+            source {
+                address 192.168.0.0/16
+            }
+            translation {
+                address 192.168.18.110
+            }
+        }
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.16.0/24
+            network 10.3.3.0/30
+        }
+        parameters {
+            router-id 2.0.0.5
+        }
+    }
+}
+system {
+    gateway-address 192.168.18.112
+    host-name east3.mydomain.local
+    name-server 192.168.11.1
+}
+vpn {
+    ipsec {
+        esp-group ESP-E3 {
+            lifetime 1800
+            mode tunnel
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption 3des
+                hash md5
+            }
+        }
+        ike-group IKE-E3 {
+            lifetime 3600
+            proposal 1 {
+                encryption aes256
+                hash sha1
+            }
+            proposal 2 {
+                encryption aes128
+                hash sha1
+            }
+        }
+        ipsec-interfaces {
+            interface eth0
+        }
+        site-to-site {
+            peer 192.168.20.109 {
+                authentication {
+                    mode pre-shared-secret
+                    pre-shared-secret ****************
+                }
+                default-esp-group ESP-E3
+                ike-group IKE-E3
+                local-address 192.168.18.110
+                tunnel 1 {
+                    protocol gre
+                }
+            }
+        }
+    }
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+
+
+<div style='float: left;'>
+<h2>west4</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.15.113/24
+    }
+    ethernet eth1 {
+        address 192.168.21.113/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.15.0/24
+            network 192.168.21.0/24
+        }
+        parameters {
+            router-id 2.0.0.3
+        }
+    }
+}
+system {
+    gateway-address 192.168.15.1
+    host-name west4.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='float: left;'>
+<h2>east4</h2>
+<pre class='cmd'><code>interfaces {
+    ethernet eth0 {
+        address 192.168.16.114/24
+    }
+    ethernet eth1 {
+        address 192.168.22.114/24
+    }
+}
+protocols {
+    ospf {
+        area 0 {
+            network 192.168.16.0/24
+            network 192.168.22.0/24
+        }
+        parameters {
+            router-id 2.0.0.6
+        }
+    }
+}
+system {
+    gateway-address 192.168.16.1
+    host-name east4.mydomain.local
+    name-server 192.168.11.1
+}
+</code></pre>
+</div>
+<div style='clear: both;'></div>
+
+<h2>やってみてどうだったか</h2>
+<p>いずれの場所で断が発生しても、しばらく待てば迂回経路にて通信ができる構成となった。しかし、断の場所によっては、回復までの時間がかなり長い。おそらく、ospf の dead 40 秒が関わるケースでの断だと回復までに長時間を要するのだろう。</p>
+<p>教わった手法1 (クラスタ機能) が、最短で回復する手法なのだろう。きっと</p>
+<hr />
+<p>2016/12/16 作成</p>
+</body>
+</html>
