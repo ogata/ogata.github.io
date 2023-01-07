@@ -1,0 +1,105 @@
+[root@storage-mix ~]# pvs
+  PV         VG        Fmt  Attr PSize   PFree
+  /dev/sdc   vg_apple  lvm2 a--  <16.00g <8.00g
+  /dev/sdd   vg_banana lvm2 a--  <16.00g <4.00g
+[root@storage-mix ~]# vgs
+  VG        #PV #LV #SN Attr   VSize   VFree
+  vg_apple    1   1   0 wz--n- <16.00g <8.00g
+  vg_banana   1   3   0 wz--n- <16.00g <4.00g
+[root@storage-mix ~]# lvs
+  LV       VG        Attr       LSize  Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple  -wi-ao----  8.00g
+  pool0    vg_banana twi-aotz-- 10.00g              20.65  1.65
+  thin1    vg_banana Vwi-aotz-- 64.00g pool0        3.18
+  thin2    vg_banana Vwi-a-tz-- 64.00g pool0        0.05
+
+
+
+■スナップショット作成
+[root@storage-mix ~]# lvcreate --snapshot --name thin1_ss_1 vg_banana/thin1
+  WARNING: Sum of all thin volume sizes (192.00 GiB) exceeds the size of thin pool vg_banana/pool0 and the size of whole volume group (<16.00 GiB).
+  WARNING: You have not turned on protection against thin pools running out of space.
+  WARNING: Set activation/thin_pool_autoextend_threshold below 100 to trigger automatic extension of thin pools before they get full.
+  Logical volume "thin1_ss_1" created.
+
+
+
+[root@storage-mix ~]# pvs
+  PV         VG        Fmt  Attr PSize   PFree
+  /dev/sdc   vg_apple  lvm2 a--  <16.00g <8.00g
+  /dev/sdd   vg_banana lvm2 a--  <16.00g <4.00g
+[root@storage-mix ~]# vgs
+  VG        #PV #LV #SN Attr   VSize   VFree
+  vg_apple    1   1   0 wz--n- <16.00g <8.00g
+  vg_banana   1   4   0 wz--n- <16.00g <4.00g
+[root@storage-mix ~]# lvs
+  LV         VG        Attr       LSize  Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple   vg_apple  -wi-ao----  8.00g
+  pool0      vg_banana twi-aotz-- 10.00g              20.65  1.65
+  thin1      vg_banana Vwi-aotz-- 64.00g pool0        3.18
+  thin1_ss_1 vg_banana Vwi---tz-k 64.00g pool0 thin1
+  thin2      vg_banana Vwi-a-tz-- 64.00g pool0        0.05
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thin-ss-1/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thin-ss-1/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thin-ss-1/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thin-ss-1/4_randread.txt
+
+
+
+■2つ目のスナップショット作成
+[root@storage-mix ~]# lvcreate --snapshot --name thin1_ss_2 vg_banana/thin1
+  WARNING: Sum of all thin volume sizes (256.00 GiB) exceeds the size of thin pool vg_banana/pool0 and the size of whole volume group (<16.00 GiB).
+  WARNING: You have not turned on protection against thin pools running out of space.
+  WARNING: Set activation/thin_pool_autoextend_threshold below 100 to trigger automatic extension of thin pools before they get full.
+  Logical volume "thin1_ss_2" created.
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thin-ss-2/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thin-ss-2/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thin-ss-2/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thin-ss-2/4_randread.txt
+
+
+
+■スナップショット削除
+[root@storage-mix ~]# lvremove  vg_banana/thin1_ss_1
+  Logical volume "thin1_ss_1" successfully removed.
+[root@storage-mix ~]# lvremove  vg_banana/thin1_ss_2
+  Logical volume "thin1_ss_2" successfully removed.
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thin-ss-3/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thin-ss-3/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thin-ss-3/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thin --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thin-ss-3/4_randread.txt
+
+
+
+[root@storage-mix ~]# grep write: /mnt/disk-lvm-thin/1_write.txt ~/lvm-thin-ss-*/1_write.txt                ■シーケンシャル write
+/mnt/disk-lvm-thin/1_write.txt:  write: IOPS=85, BW=85.3MiB/s (89.4MB/s)(1653MiB/19384msec); 0 zone resets      ■基準（スナップショット無し）
+/root/lvm-thin-ss-1/1_write.txt:  write: IOPS=62, BW=62.8MiB/s (65.9MB/s)(1760MiB/28015msec); 0 zone resets     ■スナップショットが一つ存在するときに測定・・・性能が低下
+/root/lvm-thin-ss-2/1_write.txt:  write: IOPS=62, BW=62.3MiB/s (65.3MB/s)(1763MiB/28295msec); 0 zone resets     ■スナップショットが二つ存在するときに測定
+/root/lvm-thin-ss-3/1_write.txt:  write: IOPS=91, BW=91.5MiB/s (96.0MB/s)(1660MiB/18134msec); 0 zone resets     ■スナップショットを消して測定
+[root@storage-mix ~]# grep read: /mnt/disk-lvm-thin/2_read.txt ~/lvm-thin-ss-*/2_read.txt                   ■シーケンシャル read
+/mnt/disk-lvm-thin/2_read.txt:  read: IOPS=144, BW=145MiB/s (152MB/s)(1501MiB/10358msec)                        ■基準（スナップショット無し）
+/root/lvm-thin-ss-1/2_read.txt:  read: IOPS=136, BW=136MiB/s (143MB/s)(1427MiB/10470msec)                       ■スナップショットが一つ存在するときに測定
+/root/lvm-thin-ss-2/2_read.txt:  read: IOPS=119, BW=119MiB/s (125MB/s)(1580MiB/13260msec)                       ■スナップショットが二つ存在するときに測定
+/root/lvm-thin-ss-3/2_read.txt:  read: IOPS=114, BW=115MiB/s (121MB/s)(1580MiB/13741msec)                       ■スナップショットを消して測定
+[root@storage-mix ~]# grep write: /mnt/disk-lvm-thin/3_randwrite.txt ~/lvm-thin-ss-*/3_randwrite.txt        ■ランダム write
+/mnt/disk-lvm-thin/3_randwrite.txt:  write: IOPS=221, BW=888KiB/s (909kB/s)(27.0MiB/31162msec); 0 zone resets   ■基準（スナップショット無し）
+/root/lvm-thin-ss-1/3_randwrite.txt:  write: IOPS=232, BW=929KiB/s (951kB/s)(31.2MiB/34367msec); 0 zone resets  ■スナップショットが一つ存在するときに測定・・・性能が低下していない
+/root/lvm-thin-ss-2/3_randwrite.txt:  write: IOPS=208, BW=833KiB/s (853kB/s)(24.4MiB/30001msec); 0 zone resets  ■スナップショットが二つ存在するときに測定
+/root/lvm-thin-ss-3/3_randwrite.txt:  write: IOPS=231, BW=924KiB/s (946kB/s)(27.2MiB/30087msec); 0 zone resets  ■スナップショットを消して測定
+[root@storage-mix ~]# grep read: /mnt/disk-lvm-thin/4_randread.txt ~/lvm-thin-ss-*/4_randread.txt           ■ランダム read
+/mnt/disk-lvm-thin/4_randread.txt:  read: IOPS=81, BW=324KiB/s (332kB/s)(9728KiB/30009msec)                     ■基準（スナップショット無し）
+/root/lvm-thin-ss-1/4_randread.txt:  read: IOPS=97, BW=391KiB/s (400kB/s)(11.4MiB/30008msec)                    ■スナップショットが一つ存在するときに測定
+/root/lvm-thin-ss-2/4_randread.txt:  read: IOPS=88, BW=354KiB/s (362kB/s)(10.4MiB/30011msec)                    ■スナップショットが二つ存在するときに測定
+/root/lvm-thin-ss-3/4_randread.txt:  read: IOPS=89, BW=360KiB/s (368kB/s)(10.5MiB/30007msec)                    ■スナップショットを消して測定

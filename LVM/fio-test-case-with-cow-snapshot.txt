@@ -1,0 +1,104 @@
+[root@storage-mix ~]# pvs
+  PV         VG        Fmt  Attr PSize   PFree
+  /dev/sdc   vg_apple  lvm2 a--  <16.00g <8.00g
+  /dev/sdd   vg_banana lvm2 a--  <16.00g <4.00g
+[root@storage-mix ~]# vgs
+  VG        #PV #LV #SN Attr   VSize   VFree
+  vg_apple    1   1   0 wz--n- <16.00g <8.00g
+  vg_banana   1   3   0 wz--n- <16.00g <4.00g
+[root@storage-mix ~]# lvs
+  LV       VG        Attr       LSize  Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple  -wi-ao----  8.00g
+  pool0    vg_banana twi-aotz-- 10.00g              20.65  1.65
+  thin1    vg_banana Vwi-aotz-- 64.00g pool0        3.18
+  thin2    vg_banana Vwi-a-tz-- 64.00g pool0        0.05
+
+
+
+■スナップショット作成
+[root@storage-mix ~]# lvcreate --snapshot --size 3G --name lv_apple_ss_1 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_1" created.
+
+
+
+[root@storage-mix ~]# pvs
+  PV         VG        Fmt  Attr PSize   PFree
+  /dev/sdc   vg_apple  lvm2 a--  <16.00g <5.00g
+  /dev/sdd   vg_banana lvm2 a--  <16.00g <4.00g
+[root@storage-mix ~]# vgs
+  VG        #PV #LV #SN Attr   VSize   VFree
+  vg_apple    1   2   1 wz--n- <16.00g <5.00g
+  vg_banana   1   3   0 wz--n- <16.00g <4.00g
+[root@storage-mix ~]# lvs
+  LV            VG        Attr       LSize  Pool  Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple  owi-aos---  8.00g
+  lv_apple_ss_1 vg_apple  swi-a-s---  3.00g       lv_apple 0.00
+  pool0         vg_banana twi-aotz-- 10.00g                20.65  1.65
+  thin1         vg_banana Vwi-aotz-- 64.00g pool0          3.18
+  thin2         vg_banana Vwi-a-tz-- 64.00g pool0          0.05
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thick-ss-1/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thick-ss-1/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thick-ss-1/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thick-ss-1/4_randread.txt
+
+
+
+■2つ目のスナップショット作成
+[root@storage-mix ~]# lvcreate --snapshot --size 3G --name lv_apple_ss_2 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_2" created.
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thick-ss-2/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thick-ss-2/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thick-ss-2/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thick-ss-2/4_randread.txt
+
+
+
+■スナップショット削除
+[root@storage-mix ~]# lvremove vg_apple/lv_apple_ss_1
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_1? [y/n]: y
+  Logical volume "lv_apple_ss_1" successfully removed.
+[root@storage-mix ~]# lvremove vg_apple/lv_apple_ss_2
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_2? [y/n]: y
+  Logical volume "lv_apple_ss_2" successfully removed.
+
+
+
+■コマンド投入
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > ~/lvm-thick-ss-3/1_write.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > ~/lvm-thick-ss-3/2_read.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > ~/lvm-thick-ss-3/3_randwrite.txt
+fio --name=TEST --ioengine=libaio --direct=1 --directory=/mnt/disk-lvm-thick --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > ~/lvm-thick-ss-3/4_randread.txt
+
+
+
+[root@storage-mix ~]# grep write: /mnt/disk-lvm-thick/1_write.txt ~/lvm-thick-ss-*/1_write.txt                      ■シーケンシャル write
+/mnt/disk-lvm-thick/1_write.txt:  write: IOPS=93, BW=93.4MiB/s (97.9MB/s)(1675MiB/17937msec); 0 zone resets             ■基準（スナップショット無し）
+/root/lvm-thick-ss-1/1_write.txt:  write: IOPS=20, BW=20.4MiB/s (21.4MB/s)(614MiB/30063msec); 0 zone resets             ■スナップショットが一つ存在するときに測定・・・性能が低下
+/root/lvm-thick-ss-2/1_write.txt:  write: IOPS=20, BW=20.9MiB/s (21.9MB/s)(626MiB/30013msec); 0 zone resets             ■スナップショットが二つ存在するときに測定
+/root/lvm-thick-ss-3/1_write.txt:  write: IOPS=95, BW=95.2MiB/s (99.8MB/s)(1657MiB/17407msec); 0 zone resets            ■スナップショットを消して測定
+[root@storage-mix ~]# grep read: /mnt/disk-lvm-thick/2_read.txt ~/lvm-thick-ss-*/2_read.txt                         ■シーケンシャル read
+/mnt/disk-lvm-thick/2_read.txt:  read: IOPS=133, BW=134MiB/s (140MB/s)(1566MiB/11725msec)                               ■基準（スナップショット無し）
+/root/lvm-thick-ss-1/2_read.txt:  read: IOPS=133, BW=134MiB/s (140MB/s)(1531MiB/11438msec)                              ■スナップショットが一つ存在するときに測定
+/root/lvm-thick-ss-2/2_read.txt:  read: IOPS=136, BW=137MiB/s (143MB/s)(1555MiB/11377msec)                              ■スナップショットが二つ存在するときに測定
+/root/lvm-thick-ss-3/2_read.txt:  read: IOPS=134, BW=134MiB/s (141MB/s)(1542MiB/11484msec)                              ■スナップショットを消して測定
+[root@storage-mix ~]# grep write: /mnt/disk-lvm-thick/3_randwrite.txt ~/lvm-thick-ss-*/3_randwrite.txt              ■ランダム write
+/mnt/disk-lvm-thick/3_randwrite.txt:  write: IOPS=218, BW=874KiB/s (895kB/s)(27.2MiB/31872msec); 0 zone resets          ■基準（スナップショット無し）
+/root/lvm-thick-ss-1/3_randwrite.txt:  write: IOPS=74, BW=296KiB/s (303kB/s)(8892KiB/30018msec); 0 zone resets          ■スナップショットが一つ存在するときに測定・・・性能が低下
+/root/lvm-thick-ss-2/3_randwrite.txt:  write: IOPS=81, BW=326KiB/s (334kB/s)(9792KiB/30002msec); 0 zone resets          ■スナップショットが二つ存在するときに測定
+/root/lvm-thick-ss-3/3_randwrite.txt:  write: IOPS=238, BW=954KiB/s (976kB/s)(29.7MiB/31857msec); 0 zone resets         ■スナップショットを消して測定
+[root@storage-mix ~]# grep read: /mnt/disk-lvm-thick/4_randread.txt ~/lvm-thick-ss-*/4_randread.txt                 ■ランダム read
+/mnt/disk-lvm-thick/4_randread.txt:  read: IOPS=97, BW=390KiB/s (400kB/s)(11.4MiB/30008msec)                            ■基準（スナップショット無し）
+/root/lvm-thick-ss-1/4_randread.txt:  read: IOPS=104, BW=419KiB/s (429kB/s)(12.3MiB/30005msec)                          ■スナップショットが一つ存在するときに測定
+/root/lvm-thick-ss-2/4_randread.txt:  read: IOPS=115, BW=464KiB/s (475kB/s)(13.6MiB/30005msec)                          ■スナップショットが二つ存在するときに測定
+/root/lvm-thick-ss-3/4_randread.txt:  read: IOPS=95, BW=382KiB/s (391kB/s)(11.2MiB/30007msec)                           ■スナップショットを消して測定
+
+
+

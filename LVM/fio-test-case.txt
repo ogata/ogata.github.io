@@ -1,0 +1,36 @@
+
+
+■コマンド投入
+DIRs=(
+	'/mnt/disk-standard'
+	'/mnt/disk-lvm-thick'
+	'/mnt/disk-lvm-thin'
+)
+for DIR in "${DIRs[@]}"
+do
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > "$DIR/1_write.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > "$DIR/2_read.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > "$DIR/3_randwrite.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > "$DIR/4_randread.txt"
+done
+
+
+
+
+[root@storage-mix ~]# grep write: /mnt/disk-*/1_*.txt
+/mnt/disk-lvm-thick/1_write.txt:  write: IOPS=93, BW=93.4MiB/s (97.9MB/s)(1675MiB/17937msec); 0 zone resets
+/mnt/disk-lvm-thin/1_write.txt:  write: IOPS=85, BW=85.3MiB/s (89.4MB/s)(1653MiB/19384msec); 0 zone resets
+/mnt/disk-standard/1_write.txt:  write: IOPS=100, BW=101MiB/s (106MB/s)(1620MiB/16044msec); 0 zone resets
+[root@storage-mix ~]# grep read: /mnt/disk-*/2_*.txt
+/mnt/disk-lvm-thick/2_read.txt:  read: IOPS=133, BW=134MiB/s (140MB/s)(1566MiB/11725msec)
+/mnt/disk-lvm-thin/2_read.txt:  read: IOPS=144, BW=145MiB/s (152MB/s)(1501MiB/10358msec)
+/mnt/disk-standard/2_read.txt:  read: IOPS=185, BW=186MiB/s (195MB/s)(1311MiB/7064msec)
+[root@storage-mix ~]# grep write: /mnt/disk-*/3_*.txt
+/mnt/disk-lvm-thick/3_randwrite.txt:  write: IOPS=218, BW=874KiB/s (895kB/s)(27.2MiB/31872msec); 0 zone resets
+/mnt/disk-lvm-thin/3_randwrite.txt:  write: IOPS=221, BW=888KiB/s (909kB/s)(27.0MiB/31162msec); 0 zone resets
+/mnt/disk-standard/3_randwrite.txt:  write: IOPS=212, BW=850KiB/s (870kB/s)(27.1MiB/32698msec); 0 zone resets
+[root@storage-mix ~]# grep read: /mnt/disk-*/4_*.txt
+/mnt/disk-lvm-thick/4_randread.txt:  read: IOPS=97, BW=390KiB/s (400kB/s)(11.4MiB/30008msec)
+/mnt/disk-lvm-thin/4_randread.txt:  read: IOPS=81, BW=324KiB/s (332kB/s)(9728KiB/30009msec)
+/mnt/disk-standard/4_randread.txt:  read: IOPS=92, BW=370KiB/s (379kB/s)(10.9MiB/30001msec)
+
