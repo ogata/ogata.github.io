@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+<title>Amazon WorkSpaces を試した</title>
+</head>
+<body style='background-color: mintcream'>
+<h1>Amazon WorkSpaces を試した</h1>
+
+<ul>
+	<li>WorkSpaces を構成する要素
+		<ul>
+			<li><a href='#Directories'>Directories</a></li>
+			<li><a href='#WorkSpaces'>WorkSpaces</a></li>
+			<li><a href='#Bundles'>Bundles</a></li>
+			<li><a href='#Images'>Images</a></li>
+		</ul>
+	</li>
+	<li>WorkSpace を更新して最新状態を保つ
+		<ul>
+			<li><a href='#first'>最初の作業</a></li>
+			<li><a href='#migration'>WorkSpace の移行</a></li>
+			<li><a href='#whatisgoingon'>WorkSpace の移行で何が起こっているのか</a></li>
+		</ul>
+	</li>
+</ul>
+
+<h2>WorkSpaces を構成する要素</h2>
+
+<h3 id='Directories'>Directories</h3>
+<img src='001.Directories.png' border='1px'>
+
+<h3 id='WorkSpaces'>WorkSpaces</h3>
+<img src='002.WorkSpaces.png' border='1px'>
+<ul>
+<li>後述の「バンドル」をテンプレートとして仮想マシンを作り、それ（仮想マシン）と利用者を組み合わせるとワークスペースとなる</li>
+<li>Root volume は C: ドライブ</li>
+<li>User volume は D: ドライブ</li>
+</ul>
+
+<h3 id='Bundles'>Bundles</h3>
+<img src='003.Bundles.png' border='1px'>
+<ul>
+<li>ワークスペースを作る際のテンプレートとなるのが「バンドル」</li>
+<li>後述の「イメージ」とハードウェア (CPU, Memory, Storage) を組み合わせてバンドルを構成する</li>
+<li>自分が作ったバンドルは「カスタム バンドル」と呼ぶ</li>
+<li>AWS が作ったバンドルは「パブリック バンドル」と呼ぶ</li>
+</ul>
+
+<h3 id='Images'>Images</h3>
+<img src='004.Images.png' border='1px'>
+<ul>
+<li>ワークスペースを選んで、[Create image] をクリックすると「イメージ」が生成される。</li>
+<li>ワークスペースの仮想マシンを sysprep して C: ドライブを保存したものがイメージであろう。</li>
+</ul>
+
+<h2>WorkSpace を更新して最新状態を保つ</h2>
+
+<h3 id='first'>最初の作業</h3>
+
+<ul>
+<li>パブリックなバンドルにて [Launch WorkSpaces] をクリックし、ワークスペース (ws001) を作る。このワークスペースはテンプレート的な役割を担う。</li>
+<li>ws001 の C: ドライブにアプリをインストールする。</li>
+<li>アプリのインストールが済んだら、ws001 からイメージ (im001) を作り、イメージからバンドル (bn001) を作る。</li>
+<li>bn001 にて [Launch WorkSpaces] をクリックし、利用者が業務で使うワークスペースを作る。</li>
+</ul>
+
+<h3 id='migration'>WorkSpace の移行</h3>
+
+<ul>
+<li>ws001 にてアプリをバージョン アップする。</li>
+<li>アプリのバージョン アップが済んだら、ws001 からイメージ (im002) を作り、イメージからバンドル (bn002) を作る。</li>
+<li>利用者が業務で使うワークスペースにて [Migrate WorkSpaces] する。移行先は bn002 である。</li>
+</ul>
+
+<h3 id='whatisgoingon'>WorkSpace の移行で何が起こっているのか</h3>
+
+あまりに複雑なため、理解するには各人が <a href='https://docs.aws.amazon.com/ja_jp/workspaces/latest/adminguide/migrate-workspaces.html'>WorkSpace の移行 - Amazon WorkSpaces</a> を読みながら手を動かして試す必要があると思うが、以下に要点を記す。
+
+<ul>
+<li>移行に成功した場合、移行元ワークスペースは消える</li>
+<li>移行に失敗した場合、移行元ワークスペースは残る</li>
+<li>移行先となるワークスペースが<span style='color: red'>新規に作成される</span></li>
+<li>移行先として選んだバンドルの C: のコピーが移行先の C: に割り当てられる</li>
+<li>移行元ワークスペースの C: に格納されているものを移行先に持っていくことはできない</li>
+<li>移行元の D: の内容を移行先に持っていくためには、移行元ワークスペースにて自動の１２時間おきスナップショットを経ておく必要がある</li>
+</ul>
+
+<ol>
+<li>スナップショットから移行先の D:\Users\%USERNAME%MMddyyTHHmmss%.NotMigrated にコピーされる</li>
+<li>プロファイル D:\Users\%USERNAME% が<span style='color: red'>新規に作成される</span></li>
+<li>D:\Users\%USERNAME%MMddyyTHHmmss%.NotMigrated から D:\Users\%USERNAME% にファイルが移動される。robocopy を使っているようだ</li>
+</ol>
+
+<ul>
+<li>D: の全部が移行されるわけではない。</li>
+<li>移行されるのは D:\Users\%USERNAME%\Desktop や D:\Users\%USERNAME%\Documents 等に限定されている</li>
+</ul>
+
+<ul>
+<li>移行には長時間を要する</li>
+<li>移行すると、エクスプローラーの設定等、色々な情報が飛ぶ（消える）</li>
+</ul>
+
+
+テンプレートとしてのワークスペース、イメージ、バンドルを更新して最新状態を保つのはよいのだが、利用者に渡したワークスペースを更新して最新状態を保つのは現実的ではないと感じた。
+
+<hr />
+
+2023/4/29 初版
+
+</body>
+</html>
