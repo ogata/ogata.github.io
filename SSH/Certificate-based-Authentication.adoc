@@ -1,0 +1,270 @@
+= OpenSSH の証明書認証
+:toc:
+
+CA が署名した証明書を持つクライアントなら ssh でのログインを認める、そんな感じです。サーバーの ~/.ssh/authorized_keys がメンテナンス不要になります。
+
+.登場人物
+
+|===
+| IP アドレス | ホスト名 | 役割
+
+| 192.168.1.92
+| rhel9
+| 認証局
+
+| 192.168.1.93
+| rhel9apple
+| サーバー
+
+| 192.168.1.94
+| rhel9banana
+| サーバー
+
+| 192.168.1.95
+| rhel9cherry
+| ワークステーション
+
+| 192.168.1.96
+| rhel9dekopon
+| ワークステーション
+|===
+
+== 認証局にて、鍵ペアを作る
+
+....
+[root@rhel9 ~]# ssh-keygen -f ~/.ssh/user_ca_key
+Generating public/private rsa key pair.
+Enter passphrase (empty for no passphrase): ★12345
+Enter same passphrase again:                ★12345
+Your identification has been saved in /root/.ssh/user_ca_key
+Your public key has been saved in /root/.ssh/user_ca_key.pub
+The key fingerprint is:
+SHA256:0rSqNXTahRSND89bqw24Azzlvrwup7xdMZNh35NyOsg root@rhel9.test.private
+The key's randomart image is:
++---[RSA 3072]----+
+|        .o       |
+|        o..      |
+|        o=o      |
+|       +.+++.. . |
+|     .ooS.*oo.=  |
+|     .+*ooo=.+ . |
+|      =+..E+o    |
+|     +.+=.. ..   |
+|    . +**+       |
++----[SHA256]-----+
+....
+
+....
+[root@rhel9 ~]# ls -l ~/.ssh/user_ca_key*
+-rw-------. 1 root root 2655 May 28 03:42 /root/.ssh/user_ca_key        ★秘密鍵
+-rw-r--r--. 1 root root  577 May 28 03:42 /root/.ssh/user_ca_key.pub    ★公開鍵
+....
+
+== サーバーにて、認証局の公開鍵を信頼する
+
+先ほど生成した認証局の公開鍵 (user_ca_key.pub) をサーバー (rhel9apple, rhel9banana) の /etc/ssh/ に設置し、設定を投入し、有効化します。
+
+....
+[root@rhel9apple ~]# echo 'TrustedUserCAKeys /etc/ssh/user_ca_key.pub' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9apple ~]# systemctl reload sshd.service
+....
+
+....
+[root@rhel9banana ~]# echo 'TrustedUserCAKeys /etc/ssh/user_ca_key.pub' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9banana ~]# systemctl reload sshd.service
+....
+
+サーバー (rhel9apple, rhel9banana) は、認証局 (rhel9) が認めた人物を信用する・・・という意味です。
+
+== ワークステーションの個人にて、鍵ペアを作る
+
+鍵ペアがすでに存在するなら新たに作る必要は無いですが、例を示すために新たな鍵ペアを生成します。
+
+ワークステーションの山田さん (yamada@rhel9cherry) にて:
+
+....
+[yamada@rhel9cherry ~]$ ssh-keygen
+Generating public/private rsa key pair.
+Enter file in which to save the key (/home/yamada/.ssh/id_rsa):
+Created directory '/home/yamada/.ssh'.
+Enter passphrase (empty for no passphrase):★qwert
+Enter same passphrase again:★qwert
+Your identification has been saved in /home/yamada/.ssh/id_rsa
+Your public key has been saved in /home/yamada/.ssh/id_rsa.pub
+The key fingerprint is:
+SHA256:0j3Km9UQZEva3PFdm3cRJK31TmEFrCD5mG7fMlmKiKQ yamada@rhel9cherry.test.private
+The key's randomart image is:
++---[RSA 3072]----+
+|         .+ .o+==|
+|        oB.o oo*=|
+|        .==...=o*|
+|       .o.....  =|
+|      ..S +    o |
+|    .  oo. +.   .|
+|   o . ooo.=.    |
+|  E . . .+* .    |
+|        o  o     |
++----[SHA256]-----+
+[yamada@rhel9cherry ~]$ ls -l ~/.ssh/
+total 8
+-rw-------. 1 yamada yamada 2675 May 28 05:28 id_rsa        ★秘密鍵
+-rw-r--r--. 1 yamada yamada  585 May 28 05:28 id_rsa.pub    ★公開鍵
+....
+
+山田さんは自分が持つ公開鍵 (id_rsa.pub) を認証局 (rhel9) に提出します。提出方法は何でも OK です。
+
+== 認証局にて、個人に証明書を発行する
+
+認証局は自分が持つ秘密鍵を用いて、山田さんの公開鍵に署名（山田さんに証明書を発行）します。
+
+....
+[root@rhel9 ~]# ssh-keygen -s /root/.ssh/user_ca_key -I `date +%Y%m%d.%H%M%S` -n root,yamada /root/work1/id_rsa.pub
+Enter passphrase:★12345
+Signed user key /root/work1/id_rsa-cert.pub: id "20240528.054542" serial 0 for root,yamada valid forever
+....
+
+* 署名に用いる認証局秘密鍵を `-s` で指定します。
+* `-I` で Key ID を指定します。何の役に立つのか不明です。省略不可です。
+* `-n` で ssh 接続先サーバーのユーザー名を指定します。カンマ区切りで複数指定可能です。省略して何がうれしいのか不明ですが、省略することも可能です。
+* 上記例には示していませんが、`-V` で証明書の有効期限、`-O source-address=` で接続元ワークステーションのアドレス指定が可能です。
+* 証明書失効リストを使うには、`-z` でシリアル番号を証明書に埋め込む必要があるそうです。これに関して私は動作未確認です。
+
+....
+[root@rhel9 ~]# ls -l /root/work1/
+total 8
+-rw-r--r--. 1 root root 2054 May 28 05:45 id_rsa-cert.pub   ★証明書が生成された
+-rw-r--r--. 1 root root  585 May 28 05:28 id_rsa.pub
+....
+
+証明書の内容を表示します。
+
+....
+[root@rhel9 ~]# ssh-keygen -L -f /root/work1/id_rsa-cert.pub
+/root/work1/id_rsa-cert.pub:
+        Type: ssh-rsa-cert-v01@openssh.com user certificate
+        Public key: RSA-CERT SHA256:0j3Km9UQZEva3PFdm3cRJK31TmEFrCD5mG7fMlmKiKQ
+        Signing CA: RSA SHA256:0rSqNXTahRSND89bqw24Azzlvrwup7xdMZNh35NyOsg (using rsa-sha2-512)
+        Key ID: "20240528.054542"
+        Serial: 0
+        Valid: forever
+        Principals:
+                root
+                yamada
+        Critical Options: (none)
+        Extensions:
+                permit-X11-forwarding
+                permit-agent-forwarding
+                permit-port-forwarding
+                permit-pty
+                permit-user-rc
+....
+
+生成された証明書 (id_rsa-cert.pub) を山田さんに渡します。
+
+== ワークステーションにて、証明書を使ってサーバーに ssh ログインする
+
+山田さんは、認証局が発行した証明書を自分の ~/.ssh/ に設置します。
+
+....
+[yamada@rhel9cherry ~]$ ls -l ~/.ssh/id_rsa*
+-rw-------. 1 yamada yamada 2675 May 28 05:28 /home/yamada/.ssh/id_rsa
+-rw-r--r--. 1 yamada yamada 2054 May 29 03:29 /home/yamada/.ssh/id_rsa-cert.pub ★証明書
+-rw-r--r--. 1 yamada yamada  585 May 28 05:28 /home/yamada/.ssh/id_rsa.pub
+....
+
+証明書と秘密鍵を用いてサーバーに ssh ログインします。
+....
+[yamada@rhel9cherry ~]$ ssh -o CertificateFile=~/.ssh/id_rsa-cert.pub -i ~/.ssh/id_rsa root@192.168.1.93
+Enter passphrase for key '/home/yamada/.ssh/id_rsa':★qwert
+Last login: Wed May 29 03:45:34 2024 from 192.168.1.19
+....
+
+* `-o CertificateFile=` で証明書を指定
+* `-i` で秘密鍵を指定
+
+証明書を用いてログインした場合、サーバーのログに `何とかかんとか-CERT` と記録されます。
+....
+[root@rhel9apple ~]# tail -f /var/log/secure
+*** snip ***
+May 29 03:50:59 rhel9apple sshd[1917]: Accepted publickey for root from 192.168.1.95 port 46528 ssh2: RSA-CERT SHA256:0j3Km9UQZEva3PFdm3cRJK31TmEFrCD5mG7fMlmKiKQ ID 20240528.054542 (serial 0) CA RSA SHA256:0rSqNXTahRSND89bqw24Azzlvrwup7xdMZNh35NyOsg
+*** snip ***
+....
+
+ちなみに、鍵ペアを用いてログインした場合はこんな感じです。
+
+....
+May 29 03:54:07 rhel9apple sshd[1947]: Accepted publickey for root from 192.168.1.19 port 57506 ssh2: RSA SHA256:Cmo7DmZ61Cz+egwFbUzkl6o061RrSdb8i3aNa9QizIk
+....
+
+== まとめ
+
+証明書を使うことで、サーバーの ~/.ssh/authorized_keys がメンテナンス不要になりました。
+
+== その他
+
+=== エージェント
+
+ssh ログインの都度、秘密鍵のパスフレーズを入力するのは面倒なのでエージェントを使う。
+
+* http://man.openbsd.org/ssh-agent.1
+
+私の手元マシンは Windows なので
+
+* PuTTY の Pageant (綴りに注意。Pagent ではない)
+
+Pageant を Cygwin から使うために
+
+* https://www.cygwin.com/packages/summary/ssh-pageant.html <= Cygwin パッケージ情報
+* https://github.com/cuviper/ssh-pageant <= 使い方説明
+
+=== エージェント転送
+
+証明書利用時も ssh のエージェント転送は可能でした。
+
+ただし、PuTTY というか Pageant を使った場合、転送は機能せず。
+
+確認に用いたのは 0.81 (released 2024-04-15) です。
+
+残念だ。
+
+というわけで、Pageant の代わりに Funtoo の Keychain
+
+* https://www.funtoo.org/Funtoo:Keychain <= 本家
+* https://wiki.gentoo.org/wiki/Keychain <= 使い方説明がわかりやすい
+* https://cygwin.com/packages/summary/keychain.html <= Cygwin パッケージ情報
+
+=== ~/.ssh/config
+
+ssh ログインの都度 `-o CertificateFile=` で証明書を指定するのは面倒なので ~/.ssh/config を用意しておく。
+
+こういうの
+
+....
+[yamada@rhel9cherry ~]$ cat ~/.ssh/config
+Host apple
+        HostName 192.168.1.93
+        CertificateFile ~/.ssh/id_rsa-cert.pub
+        IdentityFile ~/.ssh/id_rsa
+....
+
+を用意しておくと
+
+....
+[yamada@rhel9cherry ~]$ ssh -o CertificateFile=~/.ssh/id_rsa-cert.pub -i ~/.ssh/id_rsa root@192.168.1.93
+....
+
+が
+
+....
+[yamada@rhel9cherry ~]$ ssh apple
+....
+
+で済む。
+
+=== ユーザー認証、ホスト認証
+
+ここで扱ったのはユーザー認証です。ホスト認証は試していない。
+
+=== 接続元の制限、接続先の制限
+
+接続元 ip アドレス制限は可能だけど、接続先を制限する機能は無いようだ。
