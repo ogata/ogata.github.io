@@ -243,6 +243,7 @@ ssh ログインの都度 `-o CertificateFile=` で証明書を指定するの�
 [yamada@rhel9cherry ~]$ cat ~/.ssh/config
 Host apple
         HostName 192.168.1.93
+        User root
         CertificateFile ~/.ssh/id_rsa-cert.pub
         IdentityFile ~/.ssh/id_rsa
 ....
