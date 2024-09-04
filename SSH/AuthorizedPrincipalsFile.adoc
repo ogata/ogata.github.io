@@ -1,0 +1,298 @@
+= OpenSSH の証明書認証 (二回目)
+:toc:
+
+
+前回記事にて「証明書発行の際に ssh-keygen の `-n` で接続先サーバーのユーザー名を指定する」旨を書きましたが、実はそこで指定するのはユーザー名ではありませんでした。
+
+では何を指定するのか？
+
+本記事では https://man.openbsd.org/sshd_config#AuthorizedPrincipalsFile[AuthorizedPrincipalsFile] を試します。
+
+
+== 登場人物
+
+[%nowrap]
+....
+--------------------------------------------------------------------------------------
+                        @Development    @Testing    @Staging    @Production     @Super
+--------------------------------------------------------------------------------------
+192.168.1.108   rhel9a  yes                                                     yes
+192.168.1.109   rhel9b                  yes                                     yes
+192.168.1.110   rhel9c                              yes                         yes
+192.168.1.111   rhel9d                                          yes             yes
+--------------------------------------------------------------------------------------
+192.168.1.112   rhel9e
+--------------------------------------------------------------------------------------
+....
+
+rhel9a, rhel9b, rhel9c, rhel9d は ssh ログイン先となるサーバーです。
+
+rhel9e は個人が利用するワークステーションです。
+
+@Development, @Testing, @Staging, @Production, @Super は、私が独自ルールで定めた文字列です。`@` 記号を使わなければならないとか、そういった縛りが OpenSSH にあるわけではないです。
+
+rhel9a が開発用サーバー、rhel9d が本番サービス提供サーバーといったグループ分けを意図しています。
+
+
+
+
+
+== 認証局にて、鍵ペアを作る
+
+....
+user2@mouse64g ca-work $ ssh-keygen -f ca
+Generating public/private ed25519 key pair.
+Enter passphrase (empty for no passphrase): ★12345
+Enter same passphrase again:                ★12345
+Your identification has been saved in ca
+Your public key has been saved in ca.pub
+The key fingerprint is:
+SHA256:NvUgh+f+FPE1/mqc9H9OBDAT2elufl1NHNwO0hFfKiQ user2@mouse64g
+The key's randomart image is:
++--[ED25519 256]--+
+|          E *=++o|
+|         . oo+==o|
+|        o = ooo=+|
+|         * o +oo=|
+|        S . o..oo|
+|       . o   .+.+|
+|          . .= o=|
+|           o  =o=|
+|            ...o=|
++----[SHA256]-----+
+user2@mouse64g ca-work $ ll
+total 2
+-rw------- 1 user2 なし 464 Aug 30 05:34 ca     ★秘密鍵
+-rw-r--r-- 1 user2 なし  96 Aug 30 05:34 ca.pub ★公開鍵
+user2@mouse64g ca-work $ cat ca.pub
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHmjyDWI6mUbz9h/2dXS1dTK0KlVz0XHbAx9dGyzP0Ve user2@mouse64g
+user2@mouse64g ca-work $ md5sum ca.pub
+3a63e56d67197f569f23dc83fc4d2abc *ca.pub
+....
+
+Cygwin にて、認証局の鍵ペアを作りました。
+
+== 認証局の公開鍵をサーバーに設置する
+
+[%nowrap]
+....
+[root@rhel9a ~]# echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHmjyDWI6mUbz9h/2dXS1dTK0KlVz0XHbAx9dGyzP0Ve user2@mouse64g' > /etc/ssh/ca.pub
+[root@rhel9b ~]# echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHmjyDWI6mUbz9h/2dXS1dTK0KlVz0XHbAx9dGyzP0Ve user2@mouse64g' > /etc/ssh/ca.pub
+[root@rhel9c ~]# echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHmjyDWI6mUbz9h/2dXS1dTK0KlVz0XHbAx9dGyzP0Ve user2@mouse64g' > /etc/ssh/ca.pub
+[root@rhel9d ~]# echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHmjyDWI6mUbz9h/2dXS1dTK0KlVz0XHbAx9dGyzP0Ve user2@mouse64g' > /etc/ssh/ca.pub
+....
+
+
+== ワークステーションの個人にて、鍵ペアを作る
+
+....
+[yamada@rhel9e ~]$ ssh-keygen
+Generating public/private rsa key pair.
+Enter file in which to save the key (/home/yamada/.ssh/id_rsa):
+Created directory '/home/yamada/.ssh'.
+Enter passphrase (empty for no passphrase): ★qwert
+Enter same passphrase again:                ★qwert
+Your identification has been saved in /home/yamada/.ssh/id_rsa
+Your public key has been saved in /home/yamada/.ssh/id_rsa.pub
+The key fingerprint is:
+SHA256:F4dnpi9NDwrKOEcT7LzkYUxr0AfrqIcfRxEx+yHR2Qc yamada@rhel9e.test.private
+The key's randomart image is:
++---[RSA 3072]----+
+|      *o oE.     |
+|     o Bo ...    |
+|    . X o o.=    |
+|     O B . B     |
+|    . # S o o    |
+|   o X = o = o   |
+|  o = B   o o .  |
+|   o =     .     |
+|    .            |
++----[SHA256]-----+
+[yamada@rhel9e ~]$ ls -l .ssh/
+total 8
+-rw-------. 1 yamada yamada 2655 Aug 30 05:45 id_rsa        ★秘密鍵
+-rw-r--r--. 1 yamada yamada  580 Aug 30 05:45 id_rsa.pub    ★公開鍵
+[yamada@rhel9e ~]$
+....
+
+
+
+== サーバーにて、認証局の公開鍵を信頼する
+
+前回記事には登場していない AuthorizedPrincipalsFile に着目してください。
+
+`%u` は ssh 接続先の linux ユーザーを示します。
+
+今回は root だけに指定を投入します。
+
+[%nowrap]
+....
+[root@rhel9a ~]# echo 'TrustedUserCAKeys /etc/ssh/ca.pub' > /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9a ~]# mkdir /etc/ssh/authorized_principals
+[root@rhel9a ~]# echo 'AuthorizedPrincipalsFile /etc/ssh/authorized_principals/%u' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9a ~]# echo '@Super' > /etc/ssh/authorized_principals/root
+[root@rhel9a ~]# echo '@Development' >> /etc/ssh/authorized_principals/root
+[root@rhel9a ~]# systemctl reload sshd.service
+....
+
+[%nowrap]
+....
+[root@rhel9b ~]# echo 'TrustedUserCAKeys /etc/ssh/ca.pub' > /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9b ~]# mkdir /etc/ssh/authorized_principals
+[root@rhel9b ~]# echo 'AuthorizedPrincipalsFile /etc/ssh/authorized_principals/%u' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9b ~]# echo '@Super' > /etc/ssh/authorized_principals/root
+[root@rhel9b ~]# echo '@Testing' >> /etc/ssh/authorized_principals/root
+[root@rhel9b ~]# systemctl reload sshd.service
+....
+
+[%nowrap]
+....
+[root@rhel9c ~]# echo 'TrustedUserCAKeys /etc/ssh/ca.pub' > /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9c ~]# mkdir /etc/ssh/authorized_principals
+[root@rhel9c ~]# echo 'AuthorizedPrincipalsFile /etc/ssh/authorized_principals/%u' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9c ~]# echo '@Super' > /etc/ssh/authorized_principals/root
+[root@rhel9c ~]# echo '@Staging' >> /etc/ssh/authorized_principals/root
+[root@rhel9c ~]# systemctl reload sshd.service
+....
+
+[%nowrap]
+....
+[root@rhel9d ~]# echo 'TrustedUserCAKeys /etc/ssh/ca.pub' > /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9d ~]# mkdir /etc/ssh/authorized_principals
+[root@rhel9d ~]# echo 'AuthorizedPrincipalsFile /etc/ssh/authorized_principals/%u' >> /etc/ssh/sshd_config.d/00-my.conf
+[root@rhel9d ~]# echo '@Super' > /etc/ssh/authorized_principals/root
+[root@rhel9d ~]# echo '@Production' >> /etc/ssh/authorized_principals/root
+[root@rhel9d ~]# systemctl reload sshd.service
+....
+
+
+
+== 認証局にて、個人に証明書を発行する
+
+....
+user2@mouse64g ca-work $ ll
+total 3
+-rw------- 1 user2 なし 464 Aug 30 05:34 ca             ★認証局の秘密鍵
+-rw-r--r-- 1 user2 なし  96 Aug 30 05:34 ca.pub         ★認証局の公開鍵
+-rw-r--r-- 1 user2 なし 580 Aug 30 06:14 id_rsa.pub     ★山田さんの公開鍵
+....
+
+
+[%nowrap]
+....
+user2@mouse64g ca-work $ ssh-keygen -s ca -I `date +%Y%m%d.%H%M%S` -n '@Development,@Testing,@Staging' id_rsa.pub
+Enter passphrase:   ★12345
+Signed user key id_rsa-cert.pub: id "20240831.055147" serial 0 for @Development,@Testing,@Staging valid forever
+user2@mouse64g ca-work $ ll
+total 7
+-rw------- 1 user2 なし  464 Aug 30 05:34 ca
+-rw-r--r-- 1 user2 なし   96 Aug 30 05:34 ca.pub
+-rw-r--r-- 1 user2 なし 1177 Aug 31 05:51 id_rsa-cert.pub   ★証明書が生成された
+-rw-r--r-- 1 user2 なし  580 Aug 30 06:14 id_rsa.pub
+user2@mouse64g ca-work $ ssh-keygen -L -f id_rsa-cert.pub
+id_rsa-cert.pub:
+        Type: ssh-rsa-cert-v01@openssh.com user certificate
+        Public key: RSA-CERT SHA256:F4dnpi9NDwrKOEcT7LzkYUxr0AfrqIcfRxEx+yHR2Qc
+        Signing CA: ED25519 SHA256:NvUgh+f+FPE1/mqc9H9OBDAT2elufl1NHNwO0hFfKiQ (using ssh-ed25519)
+        Key ID: "20240831.055147"
+        Serial: 0
+        Valid: forever
+        Principals:
+                @Development
+                @Testing
+                @Staging
+        Critical Options: (none)
+        Extensions:
+                permit-X11-forwarding
+                permit-agent-forwarding
+                permit-port-forwarding
+                permit-pty
+                permit-user-rc
+user2@mouse64g ca-work $
+....
+
+ssh-keygen で証明書を発行する際の `-n` にて、私が独自ルールで定めた文字列を指定しています。
+
+開発機・テスト機・ステージング機に ssh ログイン可能（本番機にはログイン不可）な、証明書を発行しています。
+
+
+== ワークステーションにて、証明書を使ってサーバーに ssh ログインする
+
+....
+[yamada@rhel9e ~]$ ll .ssh/
+total 16
+-rw-------. 1 yamada yamada 2655 Aug 30 05:45 id_rsa
+-rw-r--r--. 1 yamada yamada 1177 Aug 31 06:14 id_rsa-cert.pub   ★証明書
+-rw-r--r--. 1 yamada yamada  580 Aug 30 05:45 id_rsa.pub
+-rw-r--r--. 1 yamada yamada  380 Aug 30 06:35 known_hosts
+....
+
+[%nowrap]
+....
+[yamada@rhel9e ~]$ ssh -o CertificateFile=.ssh/id_rsa-cert.pub -i .ssh/id_rsa 192.168.1.108 -l root     ★証明書でログイン成功
+[yamada@rhel9e ~]$ ssh -o CertificateFile=.ssh/id_rsa-cert.pub -i .ssh/id_rsa 192.168.1.109 -l root     ★証明書でログイン成功
+[yamada@rhel9e ~]$ ssh -o CertificateFile=.ssh/id_rsa-cert.pub -i .ssh/id_rsa 192.168.1.110 -l root     ★証明書でログイン成功
+[yamada@rhel9e ~]$ ssh -o CertificateFile=.ssh/id_rsa-cert.pub -i .ssh/id_rsa 192.168.1.111 -l root     ★証明書ではログインできない
+....
+
+
+証明書に @Development, @Testing, @Staging のプリンシパルが埋め込まれているため、rhel9a, rhel9b, rhel9c にはログイン成功。
+
+一方、rhel9d にはログイン不可。
+
+
+
+== まとめ
+
+前回記事で
+「証明書発行の際に ssh-keygen の -n で接続先サーバーのユーザー名を指定する」
+と書きましたが、
+ユーザー名をダイレクトに指定するのではなく、自分が定めた文字列（グループ分けっぽい文字列）を指定することができます。
+
+== その他
+=== AuthorizedPrincipalsCommand
+
+私は試していませんが、
+https://man.openbsd.org/sshd_config#AuthorizedPrincipalsCommand[AuthorizedPrincipalsCommand]
+を使えば、さらに柔軟な制御が出来そうです。
+
+https://man.openbsd.org/sshd_config#TOKENS をみると、AuthorizedPrincipalsFile に比べ AuthorizedPrincipalsCommand はより多くのトークンが利用できると書いてある。
+
+
+=== Funtoo の Keychain
+
+ワークステーションからサーバーに ssh ログインする際、都度、証明書と秘密鍵を指定するのは面倒だし、証明書パスフレーズを入力するのも面倒なので、以下のようにします。
+
+....
+[yamada@rhel9e ~]$ echo 'eval `keychain --eval --agents ssh id_rsa`' >> ~/.bash_profile     ★一行追記
+[yamada@rhel9e ~]$ cat .ssh/config
+ForwardAgent yes    ★エージェント転送の有効化
+Host 192.168.1.108
+Host 192.168.1.109
+Host 192.168.1.110
+Host 192.168.1.111
+        CertificateFile ~/.ssh/id_rsa-cert.pub  ★証明書
+        IdentityFile ~/.ssh/id_rsa              ★秘密鍵
+[yamada@rhel9e ~]$
+....
+
+
+上記設定を行ったら、ワークステーション (rhel9e) からログアウトして、再ログインします。
+
+再ログイン後は・・・rhel9e => rhel9a => rhel9b => rhel9c とアメンボのようにスイスイと ssh ログインできます。
+
+
+....
+[yamada@rhel9e ~]$ ssh root@192.168.1.108
+Last login: Sat Aug 31 06:53:04 2024 from 192.168.1.110
+[root@rhel9a ~]# ssh 192.168.1.109
+Last login: Sat Aug 31 06:52:45 2024 from 192.168.1.108
+[root@rhel9b ~]# ssh 192.168.1.110
+Last login: Sat Aug 31 06:52:52 2024 from 192.168.1.109
+[root@rhel9c ~]#
+....
+
+
+前提として、それぞれの ~/.ssh/config には ForwardAgent yes を指定済みとします。
+
+
