@@ -1,0 +1,68 @@
+:toc:
+:source-highlighter: highlight.js
+
+= OpenSSH の証明書認証 (三回目)
+
+本記事では https://man.openbsd.org/sshd_config#AuthorizedPrincipalsCommand[AuthorizedPrincipalsCommand] を試します。
+
+AuthorizedPrincipalsFile に比べて柔軟な制御ができるようです。
+
+== 登場人物
+
+前回記事参照
+
+== /etc/ssh/sshd_config.d/00-my.conf
+
+----
+TrustedUserCAKeys /etc/ssh/ca.pub
+#AuthorizedPrincipalsFile /etc/ssh/authorized_principals/%u
+AuthorizedPrincipalsCommand /usr/local/bin/aiueo.sh %u %s %i
+AuthorizedPrincipalsCommandUser nobody
+----
+
+前回記事で使用した AuthorizedPrincipalsFile をコメントアウト。
+
+代わりに AuthorizedPrincipalsCommand を追記。
+
+* %u は ssh ログイン先ユーザー
+* %s は証明書のシリアル番号
+* %i は証明書の Key ID
+
+その他、どのようなトークンが利用できるかは https://man.openbsd.org/sshd_config#TOKENS を参照。
+
+%C と %D が面白そうですが、RHEL 9 付属の OpenSSH では利用不可でした。
+
+----
+[root@rhel9a ~]# rpm -qi openssh | head -3
+Name        : openssh
+Version     : 8.7p1
+Release     : 38.el9_4.4
+----
+
+https://www.openssh.com/txt/release-9.4
+
+----
+ * sshd(8): AuthorizedPrincipalsCommand and AuthorizedKeysCommand now
+   accept two additional %-expansion sequences: %D which expands to
+   the routing domain of the connected session and %C which expands
+   to the addresses and port numbers for the source and destination
+   of the connection.
+----
+
+AuthorizedPrincipalsCommand を使う際は AuthorizedPrincipalsCommandUser の指定が必須です。とりあえず nobody を指定しましたが、それでよいかどうかは不明です。
+
+== /usr/local/bin/aiueo.sh
+
+[,bash]
+----
+#! /usr/bin/bash
+USERNAME="$1"
+SERIAL="$2"
+KEY_ID="$3"
+echo '@Super'
+echo '@Development'
+----
+
+AuthorizedPrincipalsCommand で与えた情報は二行目から四行目で受け取ることができます。
+
+五行目と六行目では、許可するプリンシパルを標準出力に吐いています。この例では静的ですが、その気になれば動的生成できるというのが、AuthorizedPrincipalsFile に比べての AuthorizedPrincipalsCommand の優位点のようです。
