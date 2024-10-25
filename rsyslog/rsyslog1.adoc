@@ -1,0 +1,470 @@
+:toc:
+:source-highlighter: highlight.js
+
+= rsyslog
+
+RHEL 9 付属の rsyslog を試したので記録を残す。
+
+バージョン:
+
+----
+[root@rhel9a ~]# rsyslogd -v | head -1
+rsyslogd  8.2310.0-4.el9 (aka 2023.10) compiled with:
+[root@rhel9a ~]#
+----
+
+== 設定ファイルの文法チェック (-N 1)
+
+チェック OK の例:
+
+----
+[root@rhel9a ~]# rsyslogd -N 1
+rsyslogd: version 8.2310.0-4.el9, config validation run (level 1), master config /etc/rsyslog.conf
+rsyslogd: End of config validation run. Bye.
+[root@rhel9a ~]# echo $?
+0
+----
+
+注意せよ。文法チェックをしないよりした方がよいとは思うが完ぺきではない。
+故意に文法間違いを含めた状態でチェック OK が得られ、デーモンを開始すると実行時エラーは出ない、期待する動作はしないという酷い体験をした。
+
+== 統計カウンター (impstats)
+
+----
+[root@rhel9c ~]# diff -u /etc/rsyslog.conf{.000,}
+--- /etc/rsyslog.conf.000       2024-01-08 16:54:51.000000000 +0900
++++ /etc/rsyslog.conf   2024-10-16 04:55:24.724974779 +0900
+@@ -9,6 +9,14 @@
+ # Where to place auxiliary files
+ global(workDirectory="/var/lib/rsyslog")
+
++module(load="impstats"
++     interval="60"■報告する間隔を秒で指定
++     severity="7"
++     log.syslog="off"
++     Bracketing="on"■BEGINとENDのマーカー行を出力させる
++     ResetCounters="off"■前回との差分を報告させる場合はonにする
++     log.file="/var/log/rsyslog-stats.log")
++
+ # Use default timestamp format
+ module(load="builtin:omfile" Template="RSYSLOG_TraditionalFileFormat")
+*** snip ***
+----
+
+上記設定例だと log.file で指定したファイルが大きくなる一方なので、適切にローテーションさせる必要あり。
+
+* ResetCounters
+** on => 前回報告時からの差分、デルタが報告に載る。得られる数値が不正確になる。
+** off => 累積数値が報告に載る。
+** この項目は off にしておき、差分が必要なら、別途集計スクリプト等を自前で用意するのがおすすめ、とのこと
+
+* `module(load="impstats" ...` をどこに記述するか？
+** ドキュメントに記載の通り、馬鹿正直に rsyslog.conf の先頭に追記するとダメ。
+** 上記設定例に示したように、global の後、module の前に追記するのがよさそうである。
+
+[%nowrap]
+----
+Wed Oct 23 05:13:43 2024: BEGIN
+Wed Oct 23 05:13:43 2024: global: origin=dynstats
+Wed Oct 23 05:13:43 2024: global: origin=percentile
+Wed Oct 23 05:13:43 2024: imuxsock: origin=imuxsock submitted=0 ratelimit.discarded=0 ratelimit.numratelimiters=0
+Wed Oct 23 05:13:43 2024: action-0-builtin:omfile: origin=core.action processed=963 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-1-builtin:omfile: origin=core.action processed=9 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-2-builtin:omfile: origin=core.action processed=0 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-3-builtin:omfile: origin=core.action processed=11 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-4-builtin:omusrmsg: origin=core.action processed=0 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-5-builtin:omfile: origin=core.action processed=0 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: action-6-builtin:omfile: origin=core.action processed=0 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: my1: origin=core.action processed=1002 failed=0 suspended=0 suspended.duration=0 resumed=0
+Wed Oct 23 05:13:43 2024: resource-usage: origin=impstats utime=118753 stime=62448 maxrss=15060 minflt=1743 majflt=20 inblock=2488 oublock=3656 nvcsw=2269 nivcsw=395 openfiles=15
+Wed Oct 23 05:13:43 2024: imjournal: origin=imjournal submitted=1002 read=1002 discarded=0 failed=0 poll_failed=0 rotations=1 recovery_attempts=0 ratelimit_discarded_in_interval=0 disk_usage_bytes=4657152
+Wed Oct 23 05:13:43 2024: my1 queue: origin=core.queue size=0 enqueued=1002 full=0 discarded.full=0 discarded.nf=0 maxqsize=539
+Wed Oct 23 05:13:43 2024: main Q: origin=core.queue size=0 enqueued=1002 full=0 discarded.full=0 discarded.nf=0 maxqsize=215
+Wed Oct 23 05:13:43 2024: END
+----
+
+
+* origin
+** イベントのソースを示す
+* processed
+** 処理したイベントの数。failed を含む
+* failed
+** tcp で送り付けに失敗したイベントの数
+* suspended
+** アクションが OK 状態から NG 状態に遷移した回数
+* suspended.duration
+** アクションが NG 状態に留まっている秒数
+* resumed
+** アクションが NG 状態から OK 状態に遷移した回数
+
+== メールで通知 (ommail)
+
+SELinux:
+
+----
+[root@hydrogen ~]# setsebool logging_syslogd_can_sendmail on ★永続化なし
+[root@hydrogen ~]# setsebool -P logging_syslogd_can_sendmail on ★永続化あり
+----
+
+rsyslog:
+
+----
+[root@hydrogen ~]# cat /etc/rsyslog.d/test-mail.conf
+module(load="ommail")
+
+template (name="mailBody"    type="string" string="RSYSLOG Alert\\r\\nmsg='%msg%'")
+template (name="mailSubject" type="string" string="disk problem on %hostname%")
+
+if $msg contains "hard disk fatal failure" then {
+        action(type="ommail" server="localhost" port="25"
+                mailfrom="yamada@example.com"
+                mailto="suzuki@example.com"
+                subject.template="mailSubject"
+                action.execonlyonceeveryinterval="60") ★ここで指定した秒数の間はメール発砲を止める
+}
+----
+
+== テンプレート オブジェクト
+
+テンプレート オブジェクトは name パラメーターを持つ。
+
+テンプレート オブジェクトは type パラメーターを持つ。
+
+テンプレート オブジェクトの type は四種:
+
+* List
+* Subtree
+* String
+* Plugin
+
+タイプが list の場合の書き方:
+
+----
+template(parameters) { list-descriptions }
+----
+
+その他三種の場合の書き方:
+
+----
+template(parameters)
+----
+
+== 日付とホストでファイルを分ける
+
+送り側 (rhel9b, rhel9c) の設定:
+
+----
+[root@rhel9b ~]# diff /etc/rsyslog.conf.000 /etc/rsyslog.conf
+81a82,83
+>
+> *.* @@192.168.1.113
+----
+
+----
+[root@rhel9c ~]# diff /etc/rsyslog.conf.000 /etc/rsyslog.conf
+81a82,83
+>
+> *.* @@192.168.1.113
+----
+
+* 記述量が最小限、考慮一切無しの単純な tcp 送り付け設定を追記した
+
+受け側 (rhel9a) の設定:
+
+[%nowrap]
+----
+[root@rhel9a ~]# diff /etc/rsyslog.conf.000 /etc/rsyslog.conf
+37,38c37,38
+< #module(load="imtcp") # needs to be done just once
+< #input(type="imtcp" port="514")
+---
+> module(load="imtcp") # needs to be done just once
+> input(type="imtcp" port="514")
+81a82,101
+>
+> template (name="DynamicFileName1" type="string" string="/var/log/Dynamic/%$year%/%$month%/%$day%/%hostname%_%$year%%$month%%$day%.log")
+>
+> template (name="DynamicFileName2" type="list") {
+>       constant(value="/var/log/Dynamic/")
+>       property(name="$year")
+>       constant(value="/")
+>       property(name="$month")
+>       constant(value="/")
+>       property(name="$day")
+>       constant(value="/")
+>       property(name="hostname")
+>       constant(value="_")
+>       property(name="$year")
+>       property(name="$month")
+>       property(name="$day")
+>       constant(value=".log")
+> }
+>
+> *.* ?DynamicFileName1
+----
+
+
+* DynamicFileName1 は string 形式での記述方法
+* 同じことを list 形式で記述したいなら DynamicFileName2 のように書く
+* ファイル名テンプレートを適用するには ? 記号を使う
+* ? 記号に関して => https://www.rsyslog.com/doc/configuration/actions.html#regular-file
+* $year, $month, $day, hostname に関して => https://www.rsyslog.com/doc/configuration/properties.html
+
+
+結果:
+
+----
+[root@rhel9a ~]# ls -l /var/log/Dynamic/2024/10/03/
+total 360
+-rw-------. 1 root root   4738 Oct  3 05:49 rhel9a_20241003.log
+-rw-------. 1 root root 265982 Oct  3 05:17 rhel9b_20241003.log
+-rw-------. 1 root root  92400 Oct  3 05:46 rhel9c_20241003.log
+----
+* Dynamic, 2024, 10, 03 の各ディレクトリは自動で作成された。
+
+== udp や tcp で受信
+
+----
+[root@rhel9a ~]# cat -n /etc/rsyslog.conf.000 | grep 514 -w -C 3
+    30  # Provides UDP syslog reception
+    31  # for parameters see http://www.rsyslog.com/doc/imudp.html
+    32  #module(load="imudp") # needs to be done just once
+    33  #input(type="imudp" port="514")
+    34
+    35  # Provides TCP syslog reception
+    36  # for parameters see http://www.rsyslog.com/doc/imtcp.html
+    37  #module(load="imtcp") # needs to be done just once
+    38  #input(type="imtcp" port="514")
+    39
+    40  #### RULES ####
+    41
+----
+
+udp 受信を有効にするには 32, 33 行目をコメントアウト
+
+tcp 受信を有効にするには 37, 38 行目をコメントアウト
+
+== udp や tcp で「転送」
+
+見出しにて「送信」ではなく、あえて「転送」と書いた。
+モジュールの名前が omfwd なので転送がいいなと思ったから。
+ただそれだけ。
+
+古い書き方:
+
+----
+*.* @192.168.1.113
+----
+
+* tcp の場合は `@` の代わりに `@@` を使え
+
+新しい書き方:
+
+----
+*.* action(
+type="omfwd"
+target="192.168.1.113" port="514" protocol="udp"
+)
+----
+
+* tcp の場合は protocol に tcp を指定せよ
+
+== RFC 3164 と RFC 5424
+
+
+
+* https://tools.ietf.org/html/rfc3164
+** The BSD syslog Protocol
+** Obsoleted by RFC 5424
+
+* https://tools.ietf.org/html/rfc5424
+** The Syslog Protocol
+** Obsoletes RFC 3164
+
+RFC 3164 を BSD 形式、RFC 5424 を IETF 形式と記述している資料が存在したので、俺もそれに従おうと思う。
+
+パケットをキャプチャして観察するとわかるが、BSD 形式に比べて IETF 形式は情報（項目）が多くリッチである。
+
+
+== 転送時に IETF 形式を使う
+
+パケットをキャプチャして観察したところ、転送時は BSD 形式だった。
+
+転送時に IETF 形式を使うには、RSYSLOG_SyslogProtocol23Format というのを指定すればよい感じ。
+
+----
+[root@rhel9b ~]# diff -u /etc/rsyslog.conf.001 /etc/rsyslog.conf
+--- /etc/rsyslog.conf.001       2024-09-26 04:00:34.300783779 +0900
++++ /etc/rsyslog.conf   2024-09-26 04:35:23.199316995 +0900
+@@ -84,4 +84,5 @@
+ Target="192.168.1.113"
+ port="514"
+ Protocol="udp"
++template="RSYSLOG_SyslogProtocol23Format"
+ )
+----
+
+ただし、気になる点があった。
+
+パケット キャプチャで見ていると改行 `\n` のゴミが付いているっぽいし、タイム ゾーンが JST から UTC に化けているっぽい。
+
+== アクションに名前
+
+----
+*.* action(
+name="action12345"★これ
+type="omfwd"
+target="192.168.1.113" port="514" protocol="tcp"
+)
+----
+
+アクションには名前を付けるのが良さそう。
+
+impstats で統計をログ記録したとき（等）、自分が指定した名前が出てくるので識別に役立つ。
+
+名前を指定しない場合、rsyslog が自動で割り当てた名前が採用されて、そうなると識別が難しい。
+
+== 受け側トラブルに備える
+
+omfwd で protocol に tcp を使う場合の話。
+
+送り側にて:
+
+----
+*.* action(
+type="omfwd"
+target="192.168.1.113" port="514" protocol="tcp"
+action.resumeRetryCount="-1" ★転送での喪失を防ぐために必要なのはコレだけ
+)
+----
+
+action.resumeRetryCount="-1" で、アクションが fail するのを認めない。無限再試行させる。
+
+受け側 (192.168.1.113) がトラブルになっても、送り側は無限に再試行するので、転送での喪失が発生しない。
+
+めでたしめでたし・・・ではない。
+
+受け側トラブル時に、送り側が転送を再試行している間、/var/log/messages への追記がなされないのである。
+
+転送での喪失は発生しないが、全く関係なさそうな所が「詰まる」のである。
+
+
+== 受け側トラブルに備える (2)
+
+「詰まり」を防ぐ方法は？
+
+転送アクションにキュー (queue) を添えてやるのである。
+
+----
+*.* action(
+type="omfwd"
+target="192.168.1.113" port="514" protocol="tcp"
+queue.type="Disk" ★キューの種別を指定
+queue.filename="aiueo" ★お好きな名前を指定
+action.resumeRetryCount="-1"
+)
+----
+
+https://www.rsyslog.com/doc/whitepapers/queues_analogy.html[Turning Lanes and Rsyslog Queues — Rsyslog documentation] で使っている画像を以下に示す。
+
+image::https://www.rsyslog.com/doc/_images/direct_queue_rsyslog.png[]
+
+日本だと車は左側通行だがこの画像だと右側通行。
+右から左に向かう緑の線は主となる車の流れ。
+左から右に向かう青い線は対向車線を走る車の進む様子。
+Action 1, Action 2, Action 3, Action 4 は左折する道で、対向車線（青）に車がある場合は、左折できない。
+Action 1, Action 2, Action 4 には左折レーンが設けてあり、小さな点々は左折レーンに入っている車。
+左折レーンに入っている車は対向車線（青）に車が無いタイミングを見計らって左折する。
+Action 1, Action 2, Action 4 には左折レーンが設けてあるので、対向車線（青）が途切れない場合においても、主となる車の流れ（緑）を妨げない。
+Action 3 は左折レーンが無いので、対向車線（青）が途切れない場合に主となる車の流れ（緑）を妨げる。
+
+転送アクションにキュー (queue) を添えてやるってのは、左折レーンを設けることなのだ。
+
+先ほどの例ではキューのタイプが Disk だったので、ローカルに蓄積してくれているようだ。
+
+----
+[root@rhel9c ~]# ls -l /var/lib/rsyslog/
+total 264
+-rw-------. 1 root root 156815 Oct 13 11:43 aiueo.00000002 ★謎のファイルが生えている
+-rw-------. 1 root root    555 Oct 13 11:41 aiueo.qi ★謎のファイルが生えている
+-rw-------. 1 root root    123 Oct 13 11:43 imjournal.state
+----
+
+== 受け側トラブルに備える (3)
+
+先に示した例では「詰まり」を防ぐために
+
+----
+queue.type="Disk" ★キューの種別を指定
+queue.filename="aiueo" ★お好きな名前を指定
+----
+
+の二行を追記したが
+
+----
+queue.type="LinkedList" ★キューの種別を指定
+----
+
+の一行でも同様の効果（詰まりを防ぐ効果）が得られた。
+
+キューのモードには幾つか種類があって
+
+* Direct Queues => アクションにキューを設けない場合がコレ
+* Disk Queues => キューをディスクに置く
+* In-Memory Queues
+** LinkedList => キュー（可変サイズ）をメモリーに置く
+** FixedArray => キュー（固定サイズ）をメモリーに置く
+* Disk-Assisted Memory Queues => ディスクとメモリーの併用
+
+らしい。
+
+Disk Queues より In-Memory Queues の方が、速く動作してよいのかもしれないけれども・・・
+
+== 受け側トラブルに備える (4)
+
+受け側が何らかの理由で停止したとする。その間、送り側はログを自身に蓄積する。この状態で送り側を停止・再起動しなければならなくなったとする。送り側に蓄積しているログが失われるのではないか？
+
+* 送り側のキュー種別が Disk Queues なら心配不要。
+* 送り側のキュー種別が In-Memory Queues なら蓄積しているログは失われた。
+
+== Reliable Event Logging Protocol (RELP)
+
+tcp で 転送するアクションに Disk Queues を添えてやれば、転送時のメッセージ喪失は発生しない。
+
+以上で終了。
+
+めでたしめでたし・・・ではないケースを見つけた。
+
+※再現手順は記載しない。
+
+そのような酷い場合でも RELP を使うとメッセージ喪失を回避できたので、RELP について述べておく。
+
+受け側:
+
+----
+module(load="imrelp")
+input(type="imrelp" port="20514")
+----
+
+送り側:
+
+----
+module(load="omrelp")
+
+*.* action(
+name="my1"
+type="omrelp" target="192.168.1.113" port="20514"
+queue.type="Disk" queue.filename="aiueo"
+action.resumeRetryCount="-1"
+)
+----
+
+
+== next retry is
+
+----
+Oct  9 04:25:21 rhel9c rsyslogd[21467]: action 'action-7-builtin:omfwd' suspended (module 'builtin:omfwd'), next retry is Wed Oct  9 04:25:51 2024, retry nbr 0. There should be messages before this one giving the reason for suspension. [v8.2310.0-4.el9 try https://www.rsyslog.com/e/2007 ]
+----
+
+* `next retry is` が送り側に記録されている場合、転送でメッセージ喪失が発生している。
+* ちなみに、逆が真とは限らない。メッセージ喪失が発生していて `next retry is` が送り側に記録されていないケースがあった。
