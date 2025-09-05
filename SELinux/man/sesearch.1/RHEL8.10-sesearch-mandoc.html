@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<!-- This is an automatically generated file.  Do not edit.
+   Copyright (c) 2016 Tresys Technology, LLC.  All rights reserved.
+ -->
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    table.head, table.foot { width: 100%; }
+    td.head-rtitle, td.foot-os { text-align: right; }
+    td.head-vol { text-align: center; }
+    div.Pp { margin: 1ex 0ex; }
+    div.Nd, div.Bf, div.Op { display: inline; }
+    span.Pa, span.Ad { font-style: italic; }
+    span.Ms { font-weight: bold; }
+    dl.Bl-diag > dt { font-weight: bold; }
+    code.Nm, code.Fl, code.Cm, code.Ic, code.In, code.Fd, code.Fn,
+    code.Cd { font-weight: bold; font-family: inherit; }
+  </style>
+  <title>sesearch(1)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">sesearch(1)</td>
+    <td class="head-vol">SETools: SELinux Policy Analysis Tools</td>
+    <td class="head-rtitle">sesearch(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<p class="Pp"></p>
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+sesearch - SELinux policy query tool
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<b>sesearch</b> [OPTIONS] [OPTIONS] [EXPRESSION] [POLICY]
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<b>sesearch</b> allows the user to search the rules in a SELinux policy.
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="POLICY"><a class="permalink" href="#POLICY">POLICY</a></h1>
+A single file containing a binary policy. This file is usually named by version
+  on Linux systems, for example, <i>policy.30</i>. This file is usually named
+  <i>sepolicy</i> on Android systems. If no policy file is provided,
+  <b>sesearch</b> will search for the policy running on the current system. If
+  no policy can be found, <b>sesearch</b> will print an error message and exit.
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXPRESSIONS"><a class="permalink" href="#EXPRESSIONS">EXPRESSIONS</a></h1>
+The user may specify an expression containing values for a given field(s) in a
+  rule. If no expression is specified or if none of the specified fields apply
+  to a given rule type, all rules of that type are considered to match the
+  expression.
+<p class="Pp"></p>
+<section class="Ss">
+<h2 class="Ss" id="Type_Enforcement_Rule_Types"><a class="permalink" href="#Type_Enforcement_Rule_Types">Type
+  Enforcement Rule Types</a></h2>
+<dl class="Bl-tag">
+  <dt>-A</dt>
+  <dd>Find allow and allowxperm rules.</dd>
+  <dt>--allow</dt>
+  <dd>Find allow rules.</dd>
+  <dt>--auditallow</dt>
+  <dd>Find auditallow rules.</dd>
+  <dt>--dontaudit</dt>
+  <dd>Find dontaudit rules.</dd>
+  <dt>--allowxperm</dt>
+  <dd>Find allowxperm rules.</dd>
+  <dt>--auditallowxperm</dt>
+  <dd>Find auditallowxperm rules.</dd>
+  <dt>--dontauditxperm</dt>
+  <dd>Find dontauditxperm rules.</dd>
+  <dt>-T, --type_trans</dt>
+  <dd>Find type_transition rules.</dd>
+  <dt>--type_member</dt>
+  <dd>Find type_member rules.</dd>
+  <dt>--type_change</dt>
+  <dd>Find type_change rules.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="RBAC_Rule_Types"><a class="permalink" href="#RBAC_Rule_Types">RBAC
+  Rule Types</a></h2>
+<dl class="Bl-tag">
+  <dt>--role_allow</dt>
+  <dd>Find role allow rules.</dd>
+  <dt>--role_trans</dt>
+  <dd>Find role_transition rules.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="MLS_Rule_Types"><a class="permalink" href="#MLS_Rule_Types">MLS
+  Rule Types</a></h2>
+<dl class="Bl-tag">
+  <dt>--range_trans</dt>
+  <dd>Find range_transition rules.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Rule_Fields"><a class="permalink" href="#Rule_Fields">Rule
+  Fields</a></h2>
+<dl class="Bl-tag">
+  <dt>-s NAME, --source NAME</dt>
+  <dd>Find rules with NAME as their source type/role.</dd>
+  <dt>-t NAME, --target NAME</dt>
+  <dd>Find rules with NAME as their target type/role.</dd>
+  <dt>-D NAME, --default NAME</dt>
+  <dd>Find rules with NAME as their default type/role/level.</dd>
+  <dt>-c NAME, --class NAME</dt>
+  <dd>Find rules with NAME as their object class.</dd>
+  <dt>-p P1[,P2,...] --perm P1[,P2...]</dt>
+  <dd>Find rules with at least one of the specified permissions. Multiple
+      permissions may be specified as a comma-separated list.</dd>
+  <dt>-b BOOL[,B2,...], --bool BOOL[,B2,...]</dt>
+  <dd>Find conditional rules with the named Boolean in their conditional
+      expression. Multiple Booleans may be specified as a comma-separated list.
+      This option will include rules in both the true and false lists of the
+      conditional.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Search_Options"><a class="permalink" href="#Search_Options">Search
+  Options</a></h2>
+The following additional options modify how the search is performed.
+<dl class="Bl-tag">
+  <dt>-ds</dt>
+  <dd>A matching rule must have the specified source attribute/type/role
+      explicitly, instead of matching by attribute contents.</dd>
+  <dt>-dt</dt>
+  <dd>A matching rule must have the specified target attribute/type/role
+      explicitly, instead of matching by attribute contents.</dd>
+  <dt>-eb</dt>
+  <dd>A matching rule must have all specified Booleans, instead of matching any
+      of the specified Boolean.</dd>
+  <dt>-ep</dt>
+  <dd>A matching rule must have all specified permissions, instead of matching
+      any of the specified permission.</dd>
+  <dt>-rs</dt>
+  <dd>Use regular expression for matching the source type/role.</dd>
+  <dt>-rt</dt>
+  <dd>Use regular expression for matching the target type/role.</dd>
+  <dt>-rc</dt>
+  <dd>Use regular expression for matching the object class.</dd>
+  <dt>-rd</dt>
+  <dd>Use regular expression for matching the default type/role.</dd>
+  <dt>-rb</dt>
+  <dd>Use regular expression for matching Booleans.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt>-h, --help</dt>
+  <dd>Print help information and exit.</dd>
+  <dt>--version</dt>
+  <dd>Print version information and exit.</dd>
+  <dt>-v, --verbose</dt>
+  <dd>Print additional informational messages.</dd>
+  <dt>--debug</dt>
+  <dd>Enable debugging output.
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">AUTHOR</a></h1>
+Chris PeBenito &lt;pebenito@ieee.org&gt;
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+Please report bugs via the SETools bug tracker,
+  https://github.com/SELinuxProject/setools/issues
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+apol(1), sediff(1), sedta(1), seinfo(1), seinfoflow(1)
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2016-02-20</td>
+    <td class="foot-os">SELinux Project</td>
+  </tr>
+</table>
+</body>
+</html>
