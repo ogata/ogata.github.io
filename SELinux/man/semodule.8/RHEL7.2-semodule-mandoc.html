@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    table.head, table.foot { width: 100%; }
+    td.head-rtitle, td.foot-os { text-align: right; }
+    td.head-vol { text-align: center; }
+    div.Pp { margin: 1ex 0ex; }
+    div.Nd, div.Bf, div.Op { display: inline; }
+    span.Pa, span.Ad { font-style: italic; }
+    span.Ms { font-weight: bold; }
+    dl.Bl-diag > dt { font-weight: bold; }
+    code.Nm, code.Fl, code.Cm, code.Ic, code.In, code.Fd, code.Fn,
+    code.Cd { font-weight: bold; font-family: inherit; }
+  </style>
+  <title>SEMODULE(8)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">SEMODULE(8)</td>
+    <td class="head-vol">NSA</td>
+    <td class="head-rtitle">SEMODULE(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+semodule - Manage SELinux policy modules.
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<b>semodule [options]... MODE [MODES]...</b>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+semodule is the tool used to manage SELinux policy modules, including
+  installing, upgrading, listing and removing modules. semodule may also be used
+  to force a rebuild of policy from the module store and/or to force a reload of
+  policy without performing any other transaction. semodule acts on module
+  packages created by semodule_package. Conventionally, these files have a .pp
+  suffix (policy package), although this is not mandated in any way.
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt><b>-R, --reload</b></dt>
+  <dd>force a reload of policy</dd>
+  <dt><b>-B, --build		</b></dt>
+  <dd>force a rebuild of policy (also reloads unless -n is used)</dd>
+  <dt><b>-D, --disable_dontaudit</b></dt>
+  <dd>Temporarily remove dontaudits from policy. Reverts whenever policy is
+      rebuilt</dd>
+  <dt><b>-i,--install=MODULE_PKG</b></dt>
+  <dd>install/replace a module package</dd>
+  <dt><b>-u,--upgrade=MODULE_PKG</b></dt>
+  <dd>upgrade an existing module package, or install if the module does not
+      exist</dd>
+  <dt><b>-b,--base=MODULE_PKG</b></dt>
+  <dd>install/replace base module package</dd>
+  <dt><b>-d,--disable=MODULE_NAME</b></dt>
+  <dd>disable existing module</dd>
+  <dt><b>-e,--enable=MODULE_NAME</b></dt>
+  <dd>enable existing module</dd>
+  <dt><b>-p,--path=ROOTPATH</b></dt>
+  <dd>use an alternate root path</dd>
+  <dt><b>-r,--remove=MODULE_NAME</b></dt>
+  <dd>remove existing module</dd>
+  <dt><b>-l,--list-modules</b></dt>
+  <dd>display list of installed modules (other than base)</dd>
+  <dt><b>-s,--store	</b></dt>
+  <dd>name of the store to operate on</dd>
+  <dt><b>-n,--noreload,-N</b></dt>
+  <dd>do not reload policy after commit</dd>
+  <dt><b>-h,--help</b></dt>
+  <dd>prints help message and quit</dd>
+  <dt><b>-P,--preserve_tunables</b></dt>
+  <dd>Preserve tunables in policy</dd>
+  <dt><b>-v,--verbose</b></dt>
+  <dd>be verbose
+    <p class="Pp"></p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLE"><a class="permalink" href="#EXAMPLE">EXAMPLE</a></h1>
+<pre>
+# Install or replace a base policy package.
+$ semodule -b base.pp
+# Install or replace a non-base policy package.
+$ semodule -i httpd.pp
+# List non-base modules.
+$ semodule -l
+# Turn on all AVC Messages for which SELinux currently is &quot;dontaudit&quot;ing.
+$ semodule -DB
+# Turn &quot;dontaudit&quot; rules back on.
+$ semodule -B
+# Install or replace all non-base modules in the current directory.
+$ semodule -i *.pp
+# Install or replace all modules in the current directory.
+$ ls *.pp | grep -Ev &quot;base.pp|enableaudit.pp&quot; | xargs /usr/sbin/semodule -b base.pp -i
+</pre>
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<b>checkmodule(8), semodule_package(8)</b>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">AUTHORS</a></h1>
+<pre>
+This manual page was written by Dan Walsh &lt;dwalsh@redhat.com&gt;.
+The program was written by Karl MacMillan &lt;kmacmillan@tresys.com&gt;, Joshua Brindle &lt;jbrindle@tresys.com&gt;, Jason Tang &lt;jtang@tresys.com&gt;
+</pre>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">Nov 2005</td>
+    <td class="foot-os">Security Enhanced Linux</td>
+  </tr>
+</table>
+</body>
+</html>
