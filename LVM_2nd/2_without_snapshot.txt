@@ -1,0 +1,150 @@
+
+Standard (LVM 未使用)
+
+
+
+****************************************
+*** 
+****************************************
+■コマンド投入
+DIRs=(
+	'/mnt/disk-standard'
+	'/mnt/disk-lvm-thick'
+	'/mnt/disk-lvm-thin'
+)
+for DIR in "${DIRs[@]}"
+do
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=write     > "$DIR/1_write.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=1024k --readwrite=read      > "$DIR/2_read.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randwrite > "$DIR/3_randwrite.txt"
+	fio --name=TEST --ioengine=libaio --direct=1 --directory=$DIR --ramp_time=4 --runtime=30 --size=2g --bs=4k    --readwrite=randread  > "$DIR/4_randread.txt"
+done
+
+
+[user2@f43 ~]$ grep write: /mnt/disk-*/1_*.txt
+/mnt/disk-lvm-thick/1_write.txt:  write: IOPS=275, BW=276MiB/s (289MB/s)(749MiB/2714msec); 0 zone resets
+/mnt/disk-lvm-thin/1_write.txt:  write: IOPS=196, BW=196MiB/s (206MB/s)(1104MiB/5629msec); 0 zone resets
+/mnt/disk-standard/1_write.txt:  write: IOPS=255, BW=255MiB/s (268MB/s)(953MiB/3734msec); 0 zone resets
+[user2@f43 ~]$ grep read: /mnt/disk-*/2_*.txt
+/mnt/disk-lvm-thick/2_read.txt:  read: IOPS=855, BW=856MiB/s (897MB/s)(2048MiB/2393msec)
+/mnt/disk-lvm-thin/2_read.txt:  read: IOPS=672, BW=673MiB/s (705MB/s)(2048MiB/3044msec)
+/mnt/disk-standard/2_read.txt:  read: IOPS=858, BW=859MiB/s (900MB/s)(2048MiB/2385msec)
+[user2@f43 ~]$ grep write: /mnt/disk-*/3_*.txt
+/mnt/disk-lvm-thick/3_randwrite.txt:  write: IOPS=40.5k, BW=158MiB/s (166MB/s)(1387MiB/8771msec); 0 zone resets
+/mnt/disk-lvm-thin/3_randwrite.txt:  write: IOPS=37.3k, BW=146MiB/s (153MB/s)(1467MiB/10060msec); 0 zone resets
+/mnt/disk-standard/3_randwrite.txt:  write: IOPS=42.1k, BW=165MiB/s (173MB/s)(1381MiB/8392msec); 0 zone resets
+[user2@f43 ~]$ grep read: /mnt/disk-*/4_*.txt
+/mnt/disk-lvm-thick/4_randread.txt:  read: IOPS=11.3k, BW=44.1MiB/s (46.2MB/s)(1322MiB/30001msec)
+/mnt/disk-lvm-thin/4_randread.txt:  read: IOPS=10.9k, BW=42.6MiB/s (44.7MB/s)(1278MiB/30001msec)
+/mnt/disk-standard/4_randread.txt:  read: IOPS=11.6k, BW=45.3MiB/s (47.5MB/s)(1358MiB/30001msec)
+[user2@f43 ~]$
+
+
+[root@f43 ~]# pvs
+  PV             VG        Fmt  Attr PSize   PFree
+  /dev/nvme0n1p5 vg_apple  lvm2 a--  <16.00g <12.00g
+  /dev/nvme0n1p6 vg_banana lvm2 a--  <16.00g 820.00m
+[root@f43 ~]# vgs
+  VG        #PV #LV #SN Attr   VSize   VFree
+  vg_apple    1   1   0 wz--n- <16.00g <12.00g
+  vg_banana   1   2   0 wz--n- <16.00g 820.00m
+[root@f43 ~]# lvs
+  LV        VG        Attr       LSize  Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple  vg_apple  -wi-ao----  4.00g
+  lv_banana vg_banana Vwi-aotz--  4.00g pool0        51.59
+  pool0     vg_banana twi-aotz-- 15.16g              13.61  15.11
+
+
+[root@f43 ~]# df -Th | awk '$2 ~ "xfs|Type"'
+Filesystem                      Type      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p7                  xfs       4.0G  2.2G  1.9G  54% /mnt/disk-standard
+/dev/mapper/vg_apple-lv_apple   xfs       4.0G  2.2G  1.9G  54% /mnt/disk-lvm-thick
+/dev/mapper/vg_banana-lv_banana xfs       4.0G  2.2G  1.9G  54% /mnt/disk-lvm-thin
+
+
+
+[root@f43 ~]# ls -l /mnt/disk-*/
+/mnt/disk-lvm-thick/:
+total 2097168
+-rw-r--r--. 1 root root       2017 Jan 17 02:20 1_write.txt
+-rw-r--r--. 1 root root       1168 Jan 17 02:20 2_read.txt
+-rw-r--r--. 1 root root       2137 Jan 17 02:20 3_randwrite.txt
+-rw-r--r--. 1 root root       2084 Jan 17 02:20 4_randread.txt
+-rw-r--r--. 1 root root 2147483648 Jan 17 02:20 TEST.0.0
+
+/mnt/disk-lvm-thin/:
+total 2097168
+-rw-r--r--. 1 root root       2622 Jan 17 02:21 1_write.txt
+-rw-r--r--. 1 root root       1673 Jan 17 02:21 2_read.txt
+-rw-r--r--. 1 root root       2538 Jan 17 02:21 3_randwrite.txt
+-rw-r--r--. 1 root root       2578 Jan 17 02:21 4_randread.txt
+-rw-r--r--. 1 root root 2147483648 Jan 17 02:21 TEST.0.0
+
+/mnt/disk-standard/:
+total 2097168
+-rw-r--r--. 1 root root       1883 Jan 17 02:19 1_write.txt
+-rw-r--r--. 1 root root        968 Jan 17 02:19 2_read.txt
+-rw-r--r--. 1 root root       1828 Jan 17 02:19 3_randwrite.txt
+-rw-r--r--. 1 root root       1822 Jan 17 02:19 4_randread.txt
+-rw-r--r--. 1 root root 2147483648 Jan 17 02:19 TEST.0.0
+[root@f43 ~]#
+
+
+
+
+
+****************************************
+*** 
+****************************************
+
+[user2@f43 ~]$ grep write: /mnt/disk-*/1_*.txt
+/mnt/disk-lvm-thick/1_write.txt:  write: IOPS=275, BW=276MiB/s (289MB/s)(749MiB/2714msec); 0 zone resets
+/mnt/disk-lvm-thin/1_write.txt:  write: IOPS=196, BW=196MiB/s (206MB/s)(1104MiB/5629msec); 0 zone resets
+/mnt/disk-standard/1_write.txt:  write: IOPS=255, BW=255MiB/s (268MB/s)(953MiB/3734msec); 0 zone resets
+[user2@f43 ~]$ grep write: /mnt/disk-*/1_*.txt | awk '{print $1,$4}'
+/mnt/disk-lvm-thick/1_write.txt: BW=276MiB/s
+/mnt/disk-lvm-thin/1_write.txt: BW=196MiB/s
+/mnt/disk-standard/1_write.txt: BW=255MiB/s
+[user2@f43 ~]$
+[user2@f43 ~]$
+[user2@f43 ~]$ grep read: /mnt/disk-*/2_*.txt
+/mnt/disk-lvm-thick/2_read.txt:  read: IOPS=855, BW=856MiB/s (897MB/s)(2048MiB/2393msec)
+/mnt/disk-lvm-thin/2_read.txt:  read: IOPS=672, BW=673MiB/s (705MB/s)(2048MiB/3044msec)
+/mnt/disk-standard/2_read.txt:  read: IOPS=858, BW=859MiB/s (900MB/s)(2048MiB/2385msec)
+[user2@f43 ~]$ grep read: /mnt/disk-*/2_*.txt | awk '{print $1,$4}'
+/mnt/disk-lvm-thick/2_read.txt: BW=856MiB/s
+/mnt/disk-lvm-thin/2_read.txt: BW=673MiB/s
+/mnt/disk-standard/2_read.txt: BW=859MiB/s
+[user2@f43 ~]$
+[user2@f43 ~]$
+[user2@f43 ~]$ grep write: /mnt/disk-*/3_*.txt
+/mnt/disk-lvm-thick/3_randwrite.txt:  write: IOPS=40.5k, BW=158MiB/s (166MB/s)(1387MiB/8771msec); 0 zone resets
+/mnt/disk-lvm-thin/3_randwrite.txt:  write: IOPS=37.3k, BW=146MiB/s (153MB/s)(1467MiB/10060msec); 0 zone resets
+/mnt/disk-standard/3_randwrite.txt:  write: IOPS=42.1k, BW=165MiB/s (173MB/s)(1381MiB/8392msec); 0 zone resets
+[user2@f43 ~]$ grep write: /mnt/disk-*/3_*.txt | awk '{print $1,$4}'
+/mnt/disk-lvm-thick/3_randwrite.txt: BW=158MiB/s
+/mnt/disk-lvm-thin/3_randwrite.txt: BW=146MiB/s
+/mnt/disk-standard/3_randwrite.txt: BW=165MiB/s
+[user2@f43 ~]$
+[user2@f43 ~]$
+[user2@f43 ~]$ grep read: /mnt/disk-*/4_*.txt
+/mnt/disk-lvm-thick/4_randread.txt:  read: IOPS=11.3k, BW=44.1MiB/s (46.2MB/s)(1322MiB/30001msec)
+/mnt/disk-lvm-thin/4_randread.txt:  read: IOPS=10.9k, BW=42.6MiB/s (44.7MB/s)(1278MiB/30001msec)
+/mnt/disk-standard/4_randread.txt:  read: IOPS=11.6k, BW=45.3MiB/s (47.5MB/s)(1358MiB/30001msec)
+[user2@f43 ~]$ grep read: /mnt/disk-*/4_*.txt  | awk '{print $1,$4}'
+/mnt/disk-lvm-thick/4_randread.txt: BW=44.1MiB/s
+/mnt/disk-lvm-thin/4_randread.txt: BW=42.6MiB/s
+/mnt/disk-standard/4_randread.txt: BW=45.3MiB/s
+[user2@f43 ~]$
+
+
+****************************************
+*** 
+****************************************
+
+
+
+****************************************
+*** 
+****************************************
+

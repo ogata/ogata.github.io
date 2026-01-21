@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>LVM による性能劣化 (2nd)</title>
+    <style>
+      .bad { color: red; font-weight: bold; }
+      .good { color: green; font-weight: bold; }
+    </style>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {'packages':['corechart']});
+      google.charts.setOnLoadCallback(drawChart1);
+      google.charts.setOnLoadCallback(drawChart2);
+      google.charts.setOnLoadCallback(drawChart3);
+
+      function drawChart1() {
+        var data = google.visualization.arrayToDataTable([
+          ['type', 'LVM-thick', 'LVM-thin', 'Standard'],
+          ['Sequential write', 276, 196, 255],
+          ['Sequential read', 856, 673, 859],
+          ['Random write', 158, 146, 165],
+          ['Random read', 44.1, 42.6, 45.3]
+        ]);
+        var options = {
+          'title': 'read/write bandwidth, in MiB/s',
+          'width': 1400,
+          'hAxis': {
+            'viewWindow': {
+              'min': 0,
+              'max': 1000
+            },
+          },
+          'legend': {
+            'position': 'bottom'
+          }
+        };
+        var chart = new google.visualization.BarChart(document.getElementById('chart1'));
+        chart.draw(data, options);
+      }
+
+      function drawChart2() {
+        var data = google.visualization.arrayToDataTable([
+          ['type', '初期', 'スナップショットが一つ存在', 'スナップショットが二つ存在', 'スナップショットが三つ存在', 'スナップショットを消した状態'],
+          ['Sequential write', 276, 42.7, 41.0, 40.5, 269],
+          ['Sequential read', 856, 743, 736, 685, 930],
+          ['Random write', 158, 2.918, 2.454, 2.479, 153],
+          ['Random read', 44.1, 24.1, 24.1, 24.3, 44.5]
+        ]);
+        var options = {
+          'title': 'read/write bandwidth, in MiB/s',
+          'width': 1400,
+          'hAxis': {
+            'viewWindow': {
+              'min': 0,
+              'max': 1000
+            },
+          },
+          'legend': {
+            'position': 'bottom'
+          }
+        };
+        var chart = new google.visualization.BarChart(document.getElementById('chart2'));
+        chart.draw(data, options);
+      }
+
+      function drawChart3() {
+        var data = google.visualization.arrayToDataTable([
+          ['type', '初期', 'スナップショットが一つ存在', 'スナップショットが二つ存在', 'スナップショットが三つ存在', 'スナップショットを消した状態'],
+          ['Sequential write', 196, 192, 210, 188, 492],
+          ['Sequential read', 673, 850, 797, 827, 828],
+          ['Random write', 146, 143, 146, 131, 124],
+          ['Random read', 42.6, 44.3, 43.3, 44.7, 48.8]
+        ]);
+        var options = {
+          'title': 'read/write bandwidth, in MiB/s',
+          'width': 1400,
+          'hAxis': {
+            'viewWindow': {
+              'min': 0,
+              'max': 1000
+            },
+          },
+          'legend': {
+            'position': 'bottom'
+          }
+        };
+        var chart = new google.visualization.BarChart(document.getElementById('chart3'));
+        chart.draw(data, options);
+      }
+
+    </script>
+  </head>
+  <body style='background-color: palegoldenrod'>
+
+    <h1>LVM による性能劣化 (2nd)</h1>
+    <p>前回の記事は <a href='../LVM/Performance-impact-of-LVM.html'>ここ</a> を参照。<p>
+    <hr>
+    <p>前回は仮想マシンだったが、今回は NVMe SSD を持つ物理マシンを使っている。</p>
+    <p>OS は Fedora 43 を使用。</p>
+
+    <h2>LVM 使用による性能への影響</h2>
+    <div id='chart1'></div>
+    <p>オレンジ (LVM 未使用) を基準として他を見てほしい。</p>
+    <p>赤 (LVM-thin) の Sequential write, Sequential read が落ち込むのが目立つ。<span class='bad'>BAD</span></p>
+    <p>青 (LVM-thick) に落ち込みは見られない。<span class='good'>GOOD</span></p>
+
+    <h2>スナップショットがあると性能は劣化するのか？ (LVM-thick)</h2>
+    <div id='chart2'></div>
+    <p>青 (スナップショット無) を基準として他を見てほしい。</p>
+    <p>スナップショットが存在する場合の落ち込み (赤、オレンジ、緑) が目立つ。<span class='bad'>BAD</span></p>
+    <p>スナップショット数が多くなる (赤→オレンジ→緑) ほど性能が落ちると予想していたが、ほぼ変わらない。<span class='good'>GOOD</span></p>
+
+    <h2>スナップショットがあると性能は劣化するのか？ (LVM-thin)</h2>
+    <div id='chart3'></div>
+    <p>青 (スナップショット無) を基準として他を見てほしい。</p>
+    <p>スナップショットの有無、個数に関係なく性能はほぼ一定である。<span class='good'>GOOD</span></p>
+
+    <hr>
+    <ul>
+      <li><a href='1_prepare.txt'>1_prepare.txt</a></li>
+      <li><a href='2_without_snapshot.txt'>2_without_snapshot.txt</a></li>
+      <li><a href='3_with_snapshot_thick.txt'>3_with_snapshot_thick.txt</a></li>
+      <li><a href='4_with_snapshot_thin.txt'>4_with_snapshot_thin.txt</a></li>
+      <li><a href='hoge2.tar'>hoge2.tar</a></li>
+    </ul>
+    <hr>
+    <ul>
+      <li>2026/1/22 初版
+    </ul>
+  </body>
+</html>
+<!--
+vim: set tabstop=2 shiftwidth=2 softtabstop=2 expandtab :
+-->
