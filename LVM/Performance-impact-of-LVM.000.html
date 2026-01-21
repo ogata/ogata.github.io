@@ -13,18 +13,16 @@
       google.charts.setOnLoadCallback(drawChart1);
       google.charts.setOnLoadCallback(drawChart2);
       google.charts.setOnLoadCallback(drawChart3);
-
+      google.charts.setOnLoadCallback(drawChart4);
       function drawChart1() {
         var data = google.visualization.arrayToDataTable([
-          ['type', 'LVM-thick', 'LVM-thin', 'Standard'],
-          ['Sequential write', 93.4, 85.3, 101],
-          ['Sequential read', 134, 145, 186],
-          ['Random write', 0.874, 0.888, 0.850],
-          ['Random read', 0.390, 0.324, 0.370]
+          ['type', 'Standard', 'LVM-thick', 'LVM-thin'],
+          ['read', 186, 134, 145],
+          ['write', 101, 93.4, 85.3]
         ]);
         var options = {
-          'title': 'read/write bandwidth, in MiB/s',
-          'width': 1400,
+          'title': 'Sequential read/write bandwidth, in MiB/s',
+          'height':400,
           'hAxis': {
             'viewWindow': {
               'min': 0,
@@ -35,46 +33,42 @@
             'position': 'bottom'
           }
         };
-        var chart = new google.visualization.BarChart(document.getElementById('chart1'));
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div1'));
         chart.draw(data, options);
       }
-
       function drawChart2() {
         var data = google.visualization.arrayToDataTable([
-          ['type', '初期', 'スナップショットが一つ存在', 'スナップショットが二つ存在', 'スナップショットを消した状態'],
-          ['Sequential write', 93.4, 20.4, 20.9, 95.2],
-          ['Sequential read', 134, 134, 137, 134],
-          ['Random write', 0.874, 0.296, 0.326, 0.954],
-          ['Random read', 0.390, 0.419, 0.464, 0.382]
+          ['type', 'Standard', 'LVM-thick', 'LVM-thin'],
+          ['read', 370, 390, 324],
+          ['write', 850, 874, 888]
         ]);
         var options = {
-          'title': 'read/write bandwidth, in MiB/s',
-          'width': 1400,
+          'title': 'Random read/write bandwidth, in KiB/s',
+          'height':400,
           'hAxis': {
             'viewWindow': {
               'min': 0,
-              'max': 200
+              'max': 1000
             },
           },
           'legend': {
             'position': 'bottom'
           }
         };
-        var chart = new google.visualization.BarChart(document.getElementById('chart2'));
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div2'));
         chart.draw(data, options);
       }
-
       function drawChart3() {
         var data = google.visualization.arrayToDataTable([
           ['type', '初期', 'スナップショットが一つ存在', 'スナップショットが二つ存在', 'スナップショットを消した状態'],
-          ['Sequential write', 85.3, 62.8, 62.3, 91.5],
-          ['Sequential read', 145, 136, 119, 115],
-          ['Random write', 0.888, 0.929, 0.833, 0.924],
-          ['Random read', 0.324, 0.391, 0.354, 0.360]
+          ['LVM-thick read', 134, 134, 137, 134],
+          ['LVM-thick write', 93.4, 20.4, 20.9, 95.2],
+          ['LVM-thin read', 145, 136, 119, 115],
+          ['LVM-thin write', 85.3, 62.8, 62.3, 91.5]
         ]);
         var options = {
-          'title': 'read/write bandwidth, in MiB/s',
-          'width': 1400,
+          'title': 'Sequential read/write bandwidth, in MiB/s',
+          'height':400,
           'hAxis': {
             'viewWindow': {
               'min': 0,
@@ -85,41 +79,56 @@
             'position': 'bottom'
           }
         };
-        var chart = new google.visualization.BarChart(document.getElementById('chart3'));
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div3'));
         chart.draw(data, options);
       }
-
+      function drawChart4() {
+        var data = google.visualization.arrayToDataTable([
+          ['type', '初期', 'スナップショットが一つ存在', 'スナップショットが二つ存在', 'スナップショットを消した状態'],
+          ['LVM-thick read', 390, 419, 464, 382],
+          ['LVM-thick write', 874, 296, 326, 954],
+          ['LVM-thin read', 324, 391, 354, 360],
+          ['LVM-thin write', 888, 929, 833, 924]
+        ]);
+        var options = {
+          'title': 'Random read/write bandwidth, in KiB/s',
+          'height':400,
+          'hAxis': {
+            'viewWindow': {
+              'min': 0,
+              'max': 1000
+            },
+          },
+          'legend': {
+            'position': 'bottom'
+          }
+        };
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div4'));
+        chart.draw(data, options);
+      }
     </script>
   </head>
-  <body style='background-color: LightBlue'>
+  <body>
     <h1>LVM による性能劣化</h1>
-    <p>実機で測定した結果を <a href='../LVM_2nd/Performance-impact-of-LVM-2nd.html'>ここ</a> に載せたので、このページの結果は見ないでほしい。</p>
-    <hr>
     <p>パフォーマンス測定ツールとして <a href='https://github.com/axboe/fio'>fio</a> を利用した。</p>
     <p>物理マシンを用意することは叶わず、VirtualBox 仮想マシンを使用した。本来の性能以上に数値が上振れするのを抑止するため <a href='http://blog.livedoor.jp/aspplus/archives/51912122.html'>VirtualBox の Use Host I/O Cache は off</a> にした。VirtualBox 仮想ディスクは Dynamically allocated ではなく Fixed-size を選択した。</p>
     <p>仮想マシンで使用した OS は AlmaLinux 9.1 である。</p>
     <p>本文中で LVM-thick とは通常の LVM のことを意味する。LVM-thin はシン・プロビジョニングな LVM を意味する。Standard は LVM 未使用のことである。</p>
-
-    <h2>LVM 使用による性能への影響</h2>
-    <div id='chart1'></div>
-
-    <h2>スナップショットがあると性能は劣化するのか？ (LVM-thick)</h2>
-    <div id='chart2'></div>
-
-    <h2>スナップショットがあると性能は劣化するのか？ (LVM-thin)</h2>
-    <div id='chart3'></div>
-
+    <h2>Standard vs LVM-thick vs LVM-thin</h2>
+    <p>LVM を使うと性能が劣化するというのは本当のようだ。</p>
+    <div id="chart_div1"></div>
+    <div id="chart_div2"></div>
+    <h2>スナップショットがあると性能は劣化するのか？</h2>
+    <p>read の場合、性能劣化は見られない。</p>
+    <p>write で性能劣化が見られる。</p>
+    <div id="chart_div3"></div>
+    <div id="chart_div4"></div>
     <hr>
     <ul>
       <li><a href='fio-test-case-with-cow-snapshot.txt'>fio-test-case-with-cow-snapshot.txt</a></li>
       <li><a href='fio-test-case-with-thin-snapshot.txt'>fio-test-case-with-thin-snapshot.txt</a></li>
       <li><a href='fio-test-case.txt'>fio-test-case.txt</a></li>
       <li><a href='hoge.tar'>hoge.tar</a></li>
-    </ul>
-    <hr>
-    <ul>
-      <li>2026/1/22 データの見せ方を変更。実機測定結果ページへのリンクを追加。
-      <li>2023/1/8 初版
     </ul>
   </body>
 </html>
