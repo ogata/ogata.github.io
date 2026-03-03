@@ -1,0 +1,293 @@
+
+●●●
+[root@macbook ~]# pvs
+  PV         VG             Fmt  Attr PSize   PFree
+  /dev/sda3  fedora_macbook lvm2 a--   70.00g      0
+  /dev/sda4                 lvm2 ---  161.17g 161.17g
+[root@macbook ~]# vgs
+  VG             #PV #LV #SN Attr   VSize  VFree
+  fedora_macbook   1   1   0 wz--n- 70.00g    0
+[root@macbook ~]# lvs
+  LV   VG             Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root fedora_macbook -wi-ao---- 70.00g
+[root@macbook ~]#
+
+
+
+
+●●●
+
+[root@macbook ~]# pvcreate /dev/sda4
+  Physical volume "/dev/sda4" successfully created.
+[root@macbook ~]# vgcreate vg_banana /dev/sda4
+  Volume group "vg_banana" successfully created
+[root@macbook ~]# lvcreate --type thin-pool -n pool0 -l 95%FREE vg_banana
+  Thin pool volume with chunk size 128.00 KiB can address at most 31.75 TiB of data.
+  Logical volume "pool0" created.
+[root@macbook ~]# lvcreate -n lv_banana -V 20G --thin-pool pool0 vg_banana
+  Logical volume "lv_banana" created.
+[root@macbook ~]# lvs
+  LV        VG             Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root      fedora_macbook -wi-ao----  70.00g
+  lv_banana vg_banana      Vwi-a-tz--  20.00g pool0        0.00
+  pool0     vg_banana      twi-aotz-- 152.95g              0.00   10.42
+
+
+●●●
+[root@macbook ~]# mkfs.xfs /dev/vg_banana/lv_banana
+[root@macbook ~]# mount /dev/vg_banana/lv_banana /mnt/test
+
+●●●スナップ無し
+NAME=thin_sequential_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+
+●●●スナップ１つ
+
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_1 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_1" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           10.32
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 1.35   10.92
+
+
+NAME=thin_sequential_2nd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 4.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 05:50 thin_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:53 thin_sequential_2nd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+20260303.055316.thin_sequential_2nd.write.txt: BW=370MiB/s
+20260303.055327.thin_sequential_2nd.read.txt: BW=535MiB/s
+
+
+●●●スナップ２つ
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_2 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_2" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           20.32
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 2.66   11.25
+
+
+NAME=thin_sequential_3rd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 6.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 05:50 thin_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:53 thin_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:54 thin_sequential_3rd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+20260303.055316.thin_sequential_2nd.write.txt: BW=370MiB/s
+20260303.055327.thin_sequential_2nd.read.txt: BW=535MiB/s
+20260303.055451.thin_sequential_3rd.write.txt: BW=331MiB/s
+20260303.055459.thin_sequential_3rd.read.txt: BW=545MiB/s
+
+●●●スナップ３つ
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_3 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_3" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           30.33
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 3.97   11.60
+[root@macbook ~]#
+
+
+NAME=thin_sequential_4th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 8.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 05:50 thin_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:53 thin_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:54 thin_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:57 thin_sequential_4th.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+20260303.055316.thin_sequential_2nd.write.txt: BW=370MiB/s
+20260303.055327.thin_sequential_2nd.read.txt: BW=535MiB/s
+20260303.055451.thin_sequential_3rd.write.txt: BW=331MiB/s
+20260303.055459.thin_sequential_3rd.read.txt: BW=545MiB/s
+20260303.055707.thin_sequential_4th.write.txt: BW=328MiB/s
+20260303.055717.thin_sequential_4th.read.txt: BW=459MiB/s
+
+●●●スナップ４つ
+
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_4 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_4" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           40.33
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 5.27   11.95
+[root@macbook ~]#
+
+
+NAME=thin_sequential_5th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 10G
+-rw-r--r--. 1 root root 2.0G Mar  3 05:50 thin_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:53 thin_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:54 thin_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:57 thin_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:59 thin_sequential_5th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+20260303.055316.thin_sequential_2nd.write.txt: BW=370MiB/s
+20260303.055327.thin_sequential_2nd.read.txt: BW=535MiB/s
+20260303.055451.thin_sequential_3rd.write.txt: BW=331MiB/s
+20260303.055459.thin_sequential_3rd.read.txt: BW=545MiB/s
+20260303.055707.thin_sequential_4th.write.txt: BW=328MiB/s
+20260303.055717.thin_sequential_4th.read.txt: BW=459MiB/s
+20260303.055902.thin_sequential_5th.write.txt: BW=343MiB/s
+20260303.055915.thin_sequential_5th.read.txt: BW=463MiB/s
+
+●●●スナップ無し
+
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           50.33
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 6.58   12.30
+[root@macbook ~]# lvremove vg_banana/lv_banana_ss_1
+  Logical volume "lv_banana_ss_1" successfully removed.     ●yes/no 確認無
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           50.33
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 6.58   12.29
+[root@macbook ~]# lvremove vg_banana/lv_banana_ss_2 vg_banana/lv_banana_ss_3 vg_banana/lv_banana_ss_4
+  Logical volume "lv_banana_ss_2" successfully removed.
+  Logical volume "lv_banana_ss_3" successfully removed.
+  Logical volume "lv_banana_ss_4" successfully removed.
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        50.33
+  pool0     vg_banana twi-aotz-- 152.95g              6.58   12.23
+[root@macbook ~]#
+
+
+NAME=thin_sequential_6th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 12G
+-rw-r--r--. 1 root root 2.0G Mar  3 05:50 thin_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:53 thin_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:54 thin_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:57 thin_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 05:59 thin_sequential_5th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 06:03 thin_sequential_6th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.055025.thin_sequential_1st.write.txt: BW=355MiB/s
+20260303.055034.thin_sequential_1st.read.txt: BW=542MiB/s
+20260303.055316.thin_sequential_2nd.write.txt: BW=370MiB/s
+20260303.055327.thin_sequential_2nd.read.txt: BW=535MiB/s
+20260303.055451.thin_sequential_3rd.write.txt: BW=331MiB/s
+20260303.055459.thin_sequential_3rd.read.txt: BW=545MiB/s
+20260303.055707.thin_sequential_4th.write.txt: BW=328MiB/s
+20260303.055717.thin_sequential_4th.read.txt: BW=459MiB/s
+20260303.055902.thin_sequential_5th.write.txt: BW=343MiB/s
+20260303.055915.thin_sequential_5th.read.txt: BW=463MiB/s
+20260303.060300.thin_sequential_6th.write.txt: BW=326MiB/s
+20260303.060309.thin_sequential_6th.read.txt: BW=540MiB/s
+[root@macbook ~]#
+
+
+
+●●●
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        60.33
+  pool0     vg_banana twi-aotz-- 152.95g              7.89   12.55
+[root@macbook ~]# rm /mnt/test/thin_sequential_* -fv
+removed '/mnt/test/thin_sequential_1st.0.0'
+removed '/mnt/test/thin_sequential_2nd.0.0'
+removed '/mnt/test/thin_sequential_3rd.0.0'
+removed '/mnt/test/thin_sequential_4th.0.0'
+removed '/mnt/test/thin_sequential_5th.0.0'
+removed '/mnt/test/thin_sequential_6th.0.0'
+[root@macbook ~]# rm /mnt/test/thin_sequential_* -fv
+[root@macbook ~]#
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        60.33
+  pool0     vg_banana twi-aotz-- 152.95g              7.89   12.61
+
+
+[root@macbook ~]# fstrim --dry-run --verbose /mnt/test
+/mnt/test: 0 B (dry run) trimmed
+[root@macbook ~]# echo $?
+0
+[root@macbook ~]# fstrim --verbose /mnt/test
+/mnt/test: 20 GiB (21474836480 bytes) trimmed
+[root@macbook ~]# echo $?
+0
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        0.32
+  pool0     vg_banana twi-aotz-- 152.95g              0.04   10.44
+
+
+
+●●●
+
+
+
+
+
+●●●
+
+
+●●●
+
+
+
+
+

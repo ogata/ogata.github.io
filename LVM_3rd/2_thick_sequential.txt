@@ -1,0 +1,354 @@
+
+
+●●●
+[root@macbook ~]# fdisk /dev/sda
+
+Welcome to fdisk (util-linux 2.41.3).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+This disk is currently in use - repartitioning is probably a bad idea.
+It's recommended to umount all file systems, and swapoff all swap
+partitions on this disk.
+
+
+Command (m for help): p
+
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device       Start       End   Sectors  Size Type
+/dev/sda1     2048   1230847   1228800  600M EFI System
+/dev/sda2  1230848   5425151   4194304    2G Linux extended boot
+/dev/sda3  5425152 152233983 146808832   70G Linux LVM
+
+Command (m for help): n
+Partition number (4-128, default 4):
+First sector (152233984-490234718, default 152233984):
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (152233984-490234718, default 490233855):
+
+Created a new partition 4 of type 'Linux filesystem' and of size 161.2 GiB.
+
+Command (m for help): p
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device         Start       End   Sectors   Size Type
+/dev/sda1       2048   1230847   1228800   600M EFI System
+/dev/sda2    1230848   5425151   4194304     2G Linux extended boot
+/dev/sda3    5425152 152233983 146808832    70G Linux LVM
+/dev/sda4  152233984 490233855 337999872 161.2G Linux filesystem
+
+Command (m for help): t
+Partition number (1-4, default 4):
+Partition type or alias (type L to list all): lvm
+
+Changed type of partition 'Linux filesystem' to 'Linux LVM'.
+
+Command (m for help): p
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device         Start       End   Sectors   Size Type
+/dev/sda1       2048   1230847   1228800   600M EFI System
+/dev/sda2    1230848   5425151   4194304     2G Linux extended boot
+/dev/sda3    5425152 152233983 146808832    70G Linux LVM
+/dev/sda4  152233984 490233855 337999872 161.2G Linux LVM
+
+Command (m for help): w
+The partition table has been altered.
+Syncing disks.
+
+[root@macbook ~]#
+
+
+
+
+●●●
+[root@macbook ~]# pvs
+  PV         VG             Fmt  Attr PSize  PFree
+  /dev/sda3  fedora_macbook lvm2 a--  70.00g    0
+[root@macbook ~]# vgs
+  VG             #PV #LV #SN Attr   VSize  VFree
+  fedora_macbook   1   1   0 wz--n- 70.00g    0
+[root@macbook ~]# lvs
+  LV   VG             Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root fedora_macbook -wi-ao---- 70.00g
+
+
+●●●
+[root@macbook ~]# pvcreate /dev/sda4
+  Physical volume "/dev/sda4" successfully created.
+[root@macbook ~]# vgcreate vg_apple /dev/sda4
+  Volume group "vg_apple" successfully created
+[root@macbook ~]# lvcreate -n lv_apple -L 20G vg_apple
+  Logical volume "lv_apple" created.
+[root@macbook ~]# lvs
+  LV       VG             Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root     fedora_macbook -wi-ao---- 70.00g
+  lv_apple vg_apple       -wi-a----- 20.00g
+
+
+
+●●●
+[root@macbook ~]# mkfs.xfs /dev/vg_apple/lv_apple
+[root@macbook ~]# mount /dev/vg_apple/lv_apple /mnt/test
+
+
+●●●スナップ無し
+NAME=thick_sequential_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+
+
+
+●●●スナップ１つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_1 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_1" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_2nd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 4.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 04:25 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:30 thick_sequential_2nd.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+20260303.042905.thick_sequential_2nd.write.txt: BW=25.2MiB/s
+20260303.043035.thick_sequential_2nd.read.txt: BW=572MiB/s
+
+
+
+●●●スナップ２つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_2 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_2" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_3rd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 6.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 04:25 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:30 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:36 thick_sequential_3rd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+20260303.042905.thick_sequential_2nd.write.txt: BW=25.2MiB/s
+20260303.043035.thick_sequential_2nd.read.txt: BW=572MiB/s
+20260303.043432.thick_sequential_3rd.write.txt: BW=16.9MiB/s
+20260303.043736.thick_sequential_3rd.read.txt: BW=559MiB/s
+
+
+
+●●●スナップ３つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_3 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_3" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_4th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 8.0G
+-rw-r--r--. 1 root root 2.0G Mar  3 04:25 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:30 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:36 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:42 thick_sequential_4th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+20260303.042905.thick_sequential_2nd.write.txt: BW=25.2MiB/s
+20260303.043035.thick_sequential_2nd.read.txt: BW=572MiB/s
+20260303.043432.thick_sequential_3rd.write.txt: BW=16.9MiB/s
+20260303.043736.thick_sequential_3rd.read.txt: BW=559MiB/s
+20260303.043947.thick_sequential_4th.write.txt: BW=12.7MiB/s
+20260303.044309.thick_sequential_4th.read.txt: BW=555MiB/s
+[root@macbook ~]#
+
+
+●●●スナップ４つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_4 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_4" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 30.12
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_4 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_5th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 10G
+-rw-r--r--. 1 root root 2.0G Mar  3 04:25 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:30 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:36 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:42 thick_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:48 thick_sequential_5th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+20260303.042905.thick_sequential_2nd.write.txt: BW=25.2MiB/s
+20260303.043035.thick_sequential_2nd.read.txt: BW=572MiB/s
+20260303.043432.thick_sequential_3rd.write.txt: BW=16.9MiB/s
+20260303.043736.thick_sequential_3rd.read.txt: BW=559MiB/s
+20260303.043947.thick_sequential_4th.write.txt: BW=12.7MiB/s
+20260303.044309.thick_sequential_4th.read.txt: BW=555MiB/s
+20260303.044457.thick_sequential_5th.write.txt: BW=10.0MiB/s
+20260303.044841.thick_sequential_5th.read.txt: BW=562MiB/s
+
+●●●スナップ無し
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 40.16
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 30.12
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_4 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+[root@macbook ~]# lvremove vg_apple/lv_apple_ss_1
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_1? [y/n]: y
+  Logical volume "lv_apple_ss_1" successfully removed.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 30.12
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_4 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+[root@macbook ~]# lvremove vg_apple/lv_apple_ss_4
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_4? [y/n]: y
+  Logical volume "lv_apple_ss_4" successfully removed.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 30.12
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+[root@macbook ~]# lvremove vg_apple/lv_apple_ss_2 vg_apple/lv_apple_ss_3
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_2? [y/n]: y
+  Logical volume "lv_apple_ss_2" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_3? [y/n]: y
+  Logical volume "lv_apple_ss_3" successfully removed.
+[root@macbook ~]# lvs vg_apple
+  LV       VG       Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple -wi-ao---- 20.00g
+[root@macbook ~]#
+
+
+
+NAME=thick_sequential_6th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 12G
+-rw-r--r--. 1 root root 2.0G Mar  3 04:25 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:30 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:36 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:42 thick_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:48 thick_sequential_5th.0.0
+-rw-r--r--. 1 root root 2.0G Mar  3 04:52 thick_sequential_6th.0.0
+
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.042545.thick_sequential_1st.write.txt: BW=473MiB/s
+20260303.042558.thick_sequential_1st.read.txt: BW=565MiB/s
+20260303.042905.thick_sequential_2nd.write.txt: BW=25.2MiB/s
+20260303.043035.thick_sequential_2nd.read.txt: BW=572MiB/s
+20260303.043432.thick_sequential_3rd.write.txt: BW=16.9MiB/s
+20260303.043736.thick_sequential_3rd.read.txt: BW=559MiB/s
+20260303.043947.thick_sequential_4th.write.txt: BW=12.7MiB/s
+20260303.044309.thick_sequential_4th.read.txt: BW=555MiB/s
+20260303.044457.thick_sequential_5th.write.txt: BW=10.0MiB/s
+20260303.044841.thick_sequential_5th.read.txt: BW=562MiB/s
+20260303.045214.thick_sequential_6th.write.txt: BW=469MiB/s
+20260303.045224.thick_sequential_6th.read.txt: BW=573MiB/s
+[root@macbook ~]#
+
+
+
+
+●●●
+
+
+
+
+●●●
+
+
+
+
+●●●
+
+
+
+
+●●●
+
+
+
+
+
+
+

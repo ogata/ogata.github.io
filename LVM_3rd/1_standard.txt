@@ -1,0 +1,89 @@
+
+
+●●●
+[root@macbook ~]# fdisk /dev/sda
+
+Welcome to fdisk (util-linux 2.41.3).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+This disk is currently in use - repartitioning is probably a bad idea.
+It's recommended to umount all file systems, and swapoff all swap
+partitions on this disk.
+
+
+Command (m for help): p
+
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device       Start       End   Sectors  Size Type
+/dev/sda1     2048   1230847   1228800  600M EFI System
+/dev/sda2  1230848   5425151   4194304    2G Linux extended boot
+/dev/sda3  5425152 152233983 146808832   70G Linux LVM
+
+Command (m for help): n
+Partition number (4-128, default 4):
+First sector (152233984-490234718, default 152233984):
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (152233984-490234718, default 490233855):
+
+Created a new partition 4 of type 'Linux filesystem' and of size 161.2 GiB.
+
+Command (m for help): p
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device         Start       End   Sectors   Size Type
+/dev/sda1       2048   1230847   1228800   600M EFI System
+/dev/sda2    1230848   5425151   4194304     2G Linux extended boot
+/dev/sda3    5425152 152233983 146808832    70G Linux LVM
+/dev/sda4  152233984 490233855 337999872 161.2G Linux filesystem    ●
+
+Command (m for help): w
+The partition table has been altered.
+Syncing disks.
+
+[root@macbook ~]#
+
+
+
+
+
+●●●
+[root@macbook ~]# mkfs.xfs /dev/sda4
+[root@macbook ~]# mount /dev/sda4 /mnt/test
+
+
+●●●
+NAME=standard_sequential_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+NAME=standard_random_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+
+●●●
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.041153.standard_sequential_1st.write.txt: BW=471MiB/s
+20260303.041207.standard_sequential_1st.read.txt: BW=575MiB/s
+20260303.041221.standard_random_1st.randwrite.txt: BW=14.9MiB/s
+20260303.041237.standard_random_1st.randread.txt: BW=20.7MiB/s
+[root@macbook ~]#
+
+
+
+
+●●●
+
+

@@ -1,0 +1,234 @@
+
+●●●
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        0.32
+  pool0     vg_banana twi-aotz-- 152.95g              0.04   10.44
+[root@macbook ~]# ls -l /mnt/test/
+total 0
+
+
+
+●●●スナップ無し
+NAME=thin_random_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 128M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+
+●●●スナップ１つ
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_1 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_1" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           0.95
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.12   10.46
+
+
+NAME=thin_random_2nd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 256M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:53 thin_random_2nd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+20260303.095309.thin_random_2nd.randwrite.txt: BW=15.3MiB/s
+20260303.095348.thin_random_2nd.randread.txt: BW=18.8MiB/s
+
+
+●●●スナップ２つ
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_2 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_2" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           1.58
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.21   10.50
+
+
+NAME=thin_random_3rd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 384M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:53 thin_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:57 thin_random_3rd.0.0
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           2.20
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.29   10.55
+[root@macbook ~]#
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+20260303.095309.thin_random_2nd.randwrite.txt: BW=15.3MiB/s
+20260303.095348.thin_random_2nd.randread.txt: BW=18.8MiB/s
+20260303.095726.thin_random_3rd.randwrite.txt: BW=10.7MiB/s
+20260303.095750.thin_random_3rd.randread.txt: BW=14.6MiB/s
+
+
+●●●スナップ３つ
+
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_3 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_3" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           2.20
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.29   10.55
+
+
+NAME=thin_random_4th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 512M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:53 thin_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:57 thin_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:01 thin_random_4th.0.0
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+20260303.095309.thin_random_2nd.randwrite.txt: BW=15.3MiB/s
+20260303.095348.thin_random_2nd.randread.txt: BW=18.8MiB/s
+20260303.095726.thin_random_3rd.randwrite.txt: BW=10.7MiB/s
+20260303.095750.thin_random_3rd.randread.txt: BW=14.6MiB/s
+20260303.100125.thin_random_4th.randwrite.txt: BW=11.6MiB/s
+20260303.100143.thin_random_4th.randread.txt: BW=15.6MiB/s
+[root@macbook ~]#
+
+
+●●●スナップ４つ
+[root@macbook ~]# lvcreate --snapshot --name lv_banana_ss_4 vg_banana/lv_banana
+  Logical volume "lv_banana_ss_4" created.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           2.83
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.37   10.59
+
+
+
+NAME=thin_random_5th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 640M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:53 thin_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:57 thin_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:01 thin_random_4th.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:03 thin_random_5th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+20260303.095309.thin_random_2nd.randwrite.txt: BW=15.3MiB/s
+20260303.095348.thin_random_2nd.randread.txt: BW=18.8MiB/s
+20260303.095726.thin_random_3rd.randwrite.txt: BW=10.7MiB/s
+20260303.095750.thin_random_3rd.randread.txt: BW=14.6MiB/s
+20260303.100125.thin_random_4th.randwrite.txt: BW=11.6MiB/s
+20260303.100143.thin_random_4th.randread.txt: BW=15.6MiB/s
+20260303.100302.thin_random_5th.randwrite.txt: BW=11.0MiB/s
+20260303.100316.thin_random_5th.randread.txt: BW=18.6MiB/s
+[root@macbook ~]#
+
+
+
+●●●スナップ無し
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           3.45
+  lv_banana_ss_1 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.45   10.62
+[root@macbook ~]# lvremove vg_banana/lv_banana_ss_1
+  Logical volume "lv_banana_ss_1" successfully removed.
+[root@macbook ~]# lvs vg_banana
+  LV             VG        Attr       LSize   Pool  Origin    Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana      vg_banana Vwi-aotz--  20.00g pool0           3.45
+  lv_banana_ss_2 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_3 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  lv_banana_ss_4 vg_banana Vwi---tz-k  20.00g pool0 lv_banana
+  pool0          vg_banana twi-aotz-- 152.95g                 0.45   10.61
+[root@macbook ~]# lvremove vg_banana/lv_banana_ss_2 vg_banana/lv_banana_ss_3 vg_banana/lv_banana_ss_4
+  Logical volume "lv_banana_ss_2" successfully removed.
+  Logical volume "lv_banana_ss_3" successfully removed.
+  Logical volume "lv_banana_ss_4" successfully removed.
+[root@macbook ~]# lvs vg_banana
+  LV        VG        Attr       LSize   Pool  Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_banana vg_banana Vwi-aotz--  20.00g pool0        3.45
+  pool0     vg_banana twi-aotz-- 152.95g              0.45   10.56
+[root@macbook ~]#
+
+
+
+
+NAME=thin_random_6th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 768M
+-rw-r--r--. 1 root root 128M Mar  3 09:49 thin_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:53 thin_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 09:57 thin_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:01 thin_random_4th.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:03 thin_random_5th.0.0
+-rw-r--r--. 1 root root 128M Mar  3 10:12 thin_random_6th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260303.094938.thin_random_1st.randwrite.txt: BW=10.3MiB/s
+20260303.095003.thin_random_1st.randread.txt: BW=20.0MiB/s
+20260303.095309.thin_random_2nd.randwrite.txt: BW=15.3MiB/s
+20260303.095348.thin_random_2nd.randread.txt: BW=18.8MiB/s
+20260303.095726.thin_random_3rd.randwrite.txt: BW=10.7MiB/s
+20260303.095750.thin_random_3rd.randread.txt: BW=14.6MiB/s
+20260303.100125.thin_random_4th.randwrite.txt: BW=11.6MiB/s
+20260303.100143.thin_random_4th.randread.txt: BW=15.6MiB/s
+20260303.100302.thin_random_5th.randwrite.txt: BW=11.0MiB/s
+20260303.100316.thin_random_5th.randread.txt: BW=18.6MiB/s
+20260303.101248.thin_random_6th.randwrite.txt: BW=13.9MiB/s
+20260303.101301.thin_random_6th.randread.txt: BW=18.9MiB/s
+[root@macbook ~]#
+
+
+
+
+
