@@ -116,6 +116,10 @@
     <p>青 (スナップショット無) を基準として他を見てほしい。</p>
     <p>(所々妙な数値があるが) LVM-thin はスナップショットによる性能劣化が無い。<span class='good'>GOOD</span></p>
 
+    <h2>まとめ</h2>
+    <p>LVM-thick はスナップショットがあると write 性能がガツンと落ち、スナップショット数が増えるほど write 性能が落ちる。</p>
+    <p>LVM-thin はそんなことは無い。</p>
+
     <hr>
     <ul>
       <li><a href='1_standard.txt'>1_standard.txt</a></li>
