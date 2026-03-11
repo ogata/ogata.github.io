@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>LVM による性能劣化 (3rd)</title>
+    <title>LVM による性能劣化 (4th)</title>
     <style>
       .bad { color: red; font-weight: bold; }
       .good { color: green; font-weight: bold; }
@@ -16,10 +16,10 @@
       function drawChart1() {
         var data = google.visualization.arrayToDataTable([
           ['type', 'LVM-thick', 'LVM-thin', 'Standard'],
-          ['Sequential write', 473, 355, 471],
-          ['Sequential read', 565, 542, 575],
-          ['Random write', 17.8, 10.3, 14.9],
-          ['Random read', 18.4, 20.0, 20.7]
+          ['Sequential write', 586, 384, 573],
+          ['Sequential read', 753, 750, 755],
+          ['Random write', 94.6, 66.4, 79.8],
+          ['Random read', 174, 174, 186]
         ]);
         var options = {
           'title': 'read/write bandwidth, in MiB/s',
@@ -41,10 +41,10 @@
       function drawChart2() {
         var data = google.visualization.arrayToDataTable([
           ['type', '初期', 'スナップショットが一つ存在', '二つ', '三つ', '四つ', 'スナップショットを消した状態'],
-          ['Sequential write', 473, 25.2, 16.9, 12.7, 10.0, 469],
-          ['Sequential read', 565, 572, 559, 555, 562, 573],
-          ['Random write', 17.8, 1.107, 0.919, 0.838, 0.669, 17.5],
-          ['Random read', 18.4, 13.5, 14.7, 16.8, 16.8, 17.1]
+          ['Sequential write', 586, 43.8, 25.1, 17.4, 13.5, 583],
+          ['Sequential read', 753, 668, 649, 639, 639, 755],
+          ['Random write', 94.6, 0.3628, 0.2505, 0.1865, 0.1638, 90.6],
+          ['Random read', 174, 151, 138, 135, 151, 177]
         ]);
         var options = {
           'title': 'read/write bandwidth, in MiB/s',
@@ -66,10 +66,10 @@
       function drawChart3() {
         var data = google.visualization.arrayToDataTable([
           ['type', '初期', 'スナップショットが一つ存在', '二つ', '三つ', '四つ', 'スナップショットを消した状態'],
-          ['Sequential write', 355, 370, 331, 328, 343, 326],
-          ['Sequential read', 542, 535, 545, 459, 463, 540],
-          ['Random write', 10.3, 15.3, 10.7, 11.6, 11.0, 13.9],
-          ['Random read', 20.0, 18.8, 14.6, 15.6, 18.6, 18.9]
+          ['Sequential write', 384, 414, 419, 421, 377, 361],
+          ['Sequential read', 750, 746, 728, 674, 684, 696],
+          ['Random write', 66.4, 31.0, 29.8, 30.9, 33.3, 31.6],
+          ['Random read', 174, 181, 177, 180, 182, 178]
         ]);
         var options = {
           'title': 'read/write bandwidth, in MiB/s',
@@ -90,50 +90,44 @@
 
     </script>
   </head>
-  <body style='background-color: DarkSeaGreen'>
+  <body style='background-color: MistyRose'>
 
-    <h1>LVM による性能劣化 (3rd)</h1>
-    <p>前回の記事は <a href='../LVM_2nd/Performance-impact-of-LVM-2nd.html'>ここ</a> を参照。<p>
-    <hr>
-    <p>今回は SATA SSD を持つ物理マシンを使用。</p>
-    <p>機種は MacBook Air (13-inch, Mid 2013) である。</p>
-    <p>OS は Fedora 43 を使用。</p>
+    <h1>LVM による性能劣化 (4th)</h1>
+    <p>fio の <a href='https://fio.readthedocs.io/en/latest/fio_doc.html#cmdoption-arg-iodepth'>iodepth</a> を 8 にして再測定を行った。他の条件は変更していない。前回の記事は <a href='../LVM_3rd/Performance-impact-of-LVM-3rd.html'>ここ</a> を参照。<p>
 
     <h2>LVM 使用による性能への影響</h2>
     <div id='chart1'></div>
-    <p>オレンジ (LVM 未使用) を基準として他を見てほしい。</p>
-    <p>赤 (LVM-thin) の Sequential write が落ち込むのが目立つ。<span class='bad'>BAD</span></p>
 
     <h2>スナップショットがあると性能は劣化するのか？ (LVM-thick)</h2>
     <div id='chart2'></div>
-    <p>青 (スナップショット無) を基準として他を見てほしい。</p>
-    <p>read に関しては Sequential と Random のどちらもスナップショットによる性能劣化は見られない。</p>
-    <p>write に関しては Sequential と Random のどちらもスナップショットが一つ存在するだけで激しく性能が劣化し、スナップショット数が多くなる (赤→オレンジ→緑→紫) ほど強く劣化する。<span class='bad'>BAD</span></p>
-    <p>Random write は数値が小さいため棒 (赤、オレンジ、緑、紫) が見えないと思う。必要に応じて拡大してほしい。</p>
 
     <h2>スナップショットがあると性能は劣化するのか？ (LVM-thin)</h2>
     <div id='chart3'></div>
-    <p>青 (スナップショット無) を基準として他を見てほしい。</p>
-    <p>(所々妙な数値があるが) LVM-thin はスナップショットによる性能劣化が無い。<span class='good'>GOOD</span></p>
 
     <h2>まとめ</h2>
-    <p>LVM-thick はスナップショットがあると write 性能がガツンと落ち、スナップショット数が増えるほど write 性能が落ちる。</p>
-    <p>LVM-thin はそんなことは無い。</p>
+    <p>iodepth を変更 (1 &rArr; 8) すると、全体的に数値が良くなりました。</p>
 
     <hr>
+
+    <ul>
+      <li><a href='iodepth.txt'>iodepth.txt</a> &lArr; 最適な iodepth を探した際の記録</li>
+      <li><a href='iodepth.tar.gz'>iodepth.tar.gz</a></li>
+    </ul>
+    <hr>
+
     <ul>
       <li><a href='1_standard.txt'>1_standard.txt</a></li>
       <li><a href='2_thick_sequential.txt'>2_thick_sequential.txt</a></li>
       <li><a href='3_thick_random.txt'>3_thick_random.txt</a></li>
       <li><a href='4_thin_sequential.txt'>4_thin_sequential.txt</a></li>
       <li><a href='5_thin_random.txt'>5_thin_random.txt</a></li>
-      <li><a href='LVM-3rd.tar.gz'>LVM-3rd.tar.gz</a></li>
+      <li><a href='LVM-4th.tar.gz'>LVM-4th.tar.gz</a></li>
     </ul>
+
     <hr>
-    <p>fio の iodepth を 8 に変更して測定した &rArr; <a href='../LVM_4th/Performance-impact-of-LVM-4th.html'>here</a></p>
-    <hr>
+
     <ul>
-      <li>2026/3/4 初版
+      <li>2026/3/12 初版
     </ul>
   </body>
 </html>

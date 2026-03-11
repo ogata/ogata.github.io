@@ -1,0 +1,209 @@
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+
+
+
+▲▲▲スナップ無し
+NAME=thick_sequential_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+
+
+▲▲▲スナップ１つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_1 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_1" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_2nd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 4.0G
+-rw-r--r--. 1 root root 2.0G Mar 11 03:57 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:00 thick_sequential_2nd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+20260311.035943.thick_sequential_2nd.write.txt: BW=43.8MiB/s
+20260311.040043.thick_sequential_2nd.read.txt: BW=668MiB/s
+
+
+▲▲▲スナップ２つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_2 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_2" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_sequential_3rd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 6.0G
+-rw-r--r--. 1 root root 2.0G Mar 11 03:57 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:00 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:04 thick_sequential_3rd.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+20260311.035943.thick_sequential_2nd.write.txt: BW=43.8MiB/s
+20260311.040043.thick_sequential_2nd.read.txt: BW=668MiB/s
+20260311.040244.thick_sequential_3rd.write.txt: BW=25.1MiB/s
+20260311.040411.thick_sequential_3rd.read.txt: BW=649MiB/s
+
+
+▲▲▲スナップ３つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_3 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_3" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+NAME=thick_sequential_4th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 8.0G
+-rw-r--r--. 1 root root 2.0G Mar 11 03:57 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:00 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:04 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:08 thick_sequential_4th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+20260311.035943.thick_sequential_2nd.write.txt: BW=43.8MiB/s
+20260311.040043.thick_sequential_2nd.read.txt: BW=668MiB/s
+20260311.040244.thick_sequential_3rd.write.txt: BW=25.1MiB/s
+20260311.040411.thick_sequential_3rd.read.txt: BW=649MiB/s
+20260311.040615.thick_sequential_4th.write.txt: BW=17.4MiB/s
+20260311.040817.thick_sequential_4th.read.txt: BW=639MiB/s
+[root@macbook ~]#
+
+
+
+
+▲▲▲スナップ４つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_4 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_4" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 30.12
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 20.08
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 10.04
+  lv_apple_ss_4 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+NAME=thick_sequential_5th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 10G
+-rw-r--r--. 1 root root 2.0G Mar 11 03:57 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:00 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:04 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:08 thick_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:12 thick_sequential_5th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+20260311.035943.thick_sequential_2nd.write.txt: BW=43.8MiB/s
+20260311.040043.thick_sequential_2nd.read.txt: BW=668MiB/s
+20260311.040244.thick_sequential_3rd.write.txt: BW=25.1MiB/s
+20260311.040411.thick_sequential_3rd.read.txt: BW=649MiB/s
+20260311.040615.thick_sequential_4th.write.txt: BW=17.4MiB/s
+20260311.040817.thick_sequential_4th.read.txt: BW=639MiB/s
+20260311.041016.thick_sequential_5th.write.txt: BW=13.5MiB/s
+20260311.041517.thick_sequential_5th.read.txt: BW=639MiB/s
+
+
+
+▲▲▲スナップ無し
+[root@macbook ~]# lvremove vg_apple/lv_apple_ss_1 vg_apple/lv_apple_ss_2 vg_apple/lv_apple_ss_3 vg_apple/lv_apple_ss_4
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_1? [y/n]: y
+  Logical volume "lv_apple_ss_1" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_2? [y/n]: y
+  Logical volume "lv_apple_ss_2" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_3? [y/n]: y
+  Logical volume "lv_apple_ss_3" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_4? [y/n]: y
+  Logical volume "lv_apple_ss_4" successfully removed.
+[root@macbook ~]# lvs vg_apple
+  LV       VG       Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple -wi-ao---- 20.00g
+[root@macbook ~]#
+
+
+NAME=thick_sequential_6th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 12G
+-rw-r--r--. 1 root root 2.0G Mar 11 03:57 thick_sequential_1st.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:00 thick_sequential_2nd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:04 thick_sequential_3rd.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:08 thick_sequential_4th.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:12 thick_sequential_5th.0.0
+-rw-r--r--. 1 root root 2.0G Mar 11 04:18 thick_sequential_6th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.035718.thick_sequential_1st.write.txt: BW=586MiB/s
+20260311.035731.thick_sequential_1st.read.txt: BW=753MiB/s
+20260311.035943.thick_sequential_2nd.write.txt: BW=43.8MiB/s
+20260311.040043.thick_sequential_2nd.read.txt: BW=668MiB/s
+20260311.040244.thick_sequential_3rd.write.txt: BW=25.1MiB/s
+20260311.040411.thick_sequential_3rd.read.txt: BW=649MiB/s
+20260311.040615.thick_sequential_4th.write.txt: BW=17.4MiB/s
+20260311.040817.thick_sequential_4th.read.txt: BW=639MiB/s
+20260311.041016.thick_sequential_5th.write.txt: BW=13.5MiB/s
+20260311.041517.thick_sequential_5th.read.txt: BW=639MiB/s
+20260311.041839.thick_sequential_6th.write.txt: BW=583MiB/s
+20260311.041902.thick_sequential_6th.read.txt: BW=755MiB/s
+
+
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+

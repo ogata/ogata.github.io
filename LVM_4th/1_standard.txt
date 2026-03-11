@@ -1,0 +1,26 @@
+
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+NAME=standard_sequential_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=write     --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.write.txt;         echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g  --bs=1024k --readwrite=read      --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.read.txt;          echo $?
+NAME=standard_random_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+
+
+▲▲▲
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.034330.standard_sequential_1st.write.txt: BW=573MiB/s
+20260311.034350.standard_sequential_1st.read.txt: BW=755MiB/s
+20260311.034401.standard_random_1st.randwrite.txt: BW=79.8MiB/s
+20260311.034410.standard_random_1st.randread.txt: BW=186MiB/s
+[root@macbook ~]#
+
+▲▲▲
+

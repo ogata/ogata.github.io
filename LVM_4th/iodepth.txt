@@ -1,0 +1,174 @@
+
+
+
+
+
+
+■■■
+
+[root@macbook ~]# fdisk /dev/sda
+
+Welcome to fdisk (util-linux 2.41.3).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+This disk is currently in use - repartitioning is probably a bad idea.
+It's recommended to umount all file systems, and swapoff all swap
+partitions on this disk.
+
+
+Command (m for help): p
+
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device       Start       End   Sectors  Size Type
+/dev/sda1     2048   1230847   1228800  600M EFI System
+/dev/sda2  1230848   5425151   4194304    2G Linux extended boot
+/dev/sda3  5425152 152233983 146808832   70G Linux LVM
+
+Command (m for help): n
+Partition number (4-128, default 4):
+First sector (152233984-490234718, default 152233984):
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (152233984-490234718, default 490233855):
+
+Created a new partition 4 of type 'Linux filesystem' and of size 161.2 GiB.
+
+Command (m for help): p
+Disk /dev/sda: 233.76 GiB, 251000193024 bytes, 490234752 sectors
+Disk model: APPLE SSD SD0256
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+Disklabel type: gpt
+Disk identifier: 4F3AA6FD-834F-40F4-98AB-A83FDB4D913C
+
+Device         Start       End   Sectors   Size Type
+/dev/sda1       2048   1230847   1228800   600M EFI System
+/dev/sda2    1230848   5425151   4194304     2G Linux extended boot
+/dev/sda3    5425152 152233983 146808832    70G Linux LVM
+/dev/sda4  152233984 490233855 337999872 161.2G Linux filesystem
+
+Command (m for help): w
+The partition table has been altered.
+Syncing disks.
+
+[root@macbook ~]#
+
+
+
+■■■
+
+[root@macbook ~]# mkfs.xfs /dev/sda4
+[root@macbook ~]# mount /dev/sda4 /mnt/test
+
+
+■■■
+
+DEPTH=1
+NAME=standard_sequential_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=write --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=2
+NAME=standard_sequential_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=write --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=4
+NAME=standard_sequential_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=write --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=8
+NAME=standard_sequential_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=write --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=16
+NAME=standard_sequential_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=write --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+
+[root@macbook ~]# grep IOPS *txt
+20260310.042841.standard_sequential_write_1.txt:  write: IOPS=453, BW=453MiB/s (475MB/s)(2048MiB/4517msec); 0 zone resets
+20260310.042944.standard_sequential_write_2.txt:  write: IOPS=573, BW=574MiB/s (601MB/s)(2048MiB/3571msec); 0 zone resets
+20260310.043000.standard_sequential_write_4.txt:  write: IOPS=579, BW=579MiB/s (607MB/s)(2048MiB/3535msec); 0 zone resets
+20260310.043113.standard_sequential_write_8.txt:  write: IOPS=592, BW=592MiB/s (621MB/s)(2048MiB/3458msec); 0 zone resets   ■
+20260310.043241.standard_sequential_write_16.txt:  write: IOPS=585, BW=585MiB/s (614MB/s)(2048MiB/3500msec); 0 zone resets
+
+
+
+
+
+■■■
+DEPTH=1
+NAME=standard_sequential_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=read --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=2
+NAME=standard_sequential_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=read --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=4
+NAME=standard_sequential_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=read --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=8
+NAME=standard_sequential_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=read --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=16
+NAME=standard_sequential_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=2g --bs=1024k --readwrite=read --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+
+[root@macbook ~]# grep IOPS *read*txt
+20260310.051022.standard_sequential_read_1.txt:  read: IOPS=575, BW=575MiB/s (603MB/s)(2048MiB/3560msec)
+20260310.051131.standard_sequential_read_2.txt:  read: IOPS=750, BW=750MiB/s (787MB/s)(2048MiB/2729msec)
+20260310.051212.standard_sequential_read_4.txt:  read: IOPS=754, BW=755MiB/s (792MB/s)(2048MiB/2713msec)
+20260310.051240.standard_sequential_read_8.txt:  read: IOPS=752, BW=752MiB/s (789MB/s)(2048MiB/2722msec)    ■
+20260310.051312.standard_sequential_read_16.txt:  read: IOPS=754, BW=754MiB/s (791MB/s)(2048MiB/2715msec)
+
+
+
+■■■
+DEPTH=1
+NAME=standard_random_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randwrite --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=2
+NAME=standard_random_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randwrite --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=4
+NAME=standard_random_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randwrite --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=8
+NAME=standard_random_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randwrite --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=16
+NAME=standard_random_write_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randwrite --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+
+[root@macbook ~]# grep IOPS *random_write*
+20260310.051740.standard_random_write_1.txt:  write: IOPS=4645, BW=18.1MiB/s (19.0MB/s)(128MiB/7054msec); 0 zone resets
+20260310.051832.standard_random_write_2.txt:  write: IOPS=13.6k, BW=53.1MiB/s (55.7MB/s)(128MiB/2411msec); 0 zone resets
+20260310.052016.standard_random_write_4.txt:  write: IOPS=11.1k, BW=43.5MiB/s (45.6MB/s)(128MiB/2944msec); 0 zone resets
+20260310.052116.standard_random_write_8.txt:  write: IOPS=22.2k, BW=86.8MiB/s (91.0MB/s)(128MiB/1475msec); 0 zone resets    ■
+20260310.052240.standard_random_write_16.txt:  write: IOPS=19.9k, BW=77.9MiB/s (81.6MB/s)(128MiB/1644msec); 0 zone resets
+
+
+■■■
+DEPTH=1
+NAME=standard_random_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randread --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=2
+NAME=standard_random_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randread --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=4
+NAME=standard_random_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randread --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=8
+NAME=standard_random_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randread --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+DEPTH=16
+NAME=standard_random_read_$DEPTH
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k --readwrite=randread --iodepth=$DEPTH > ~/$(date +%Y%m%d.%H%M%S).$NAME.txt; echo $?
+
+[root@macbook ~]# grep IOPS *random_read*
+20260310.052513.standard_random_read_1.txt:  read: IOPS=4782, BW=18.7MiB/s (19.6MB/s)(128MiB/6852msec)
+20260310.052536.standard_random_read_2.txt:  read: IOPS=8759, BW=34.2MiB/s (35.9MB/s)(128MiB/3741msec)
+20260310.052547.standard_random_read_4.txt:  read: IOPS=17.4k, BW=68.2MiB/s (71.5MB/s)(128MiB/1878msec)
+20260310.052557.standard_random_read_8.txt:  read: IOPS=48.6k, BW=190MiB/s (199MB/s)(128MiB/674msec)    ■
+20260310.052605.standard_random_read_16.txt:  read: IOPS=49.2k, BW=192MiB/s (202MB/s)(128MiB/666msec)
+

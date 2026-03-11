@@ -1,0 +1,208 @@
+
+
+▲▲▲
+[root@macbook ~]# lvs vg_apple
+  LV       VG       Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple -wi-ao---- 20.00g
+[root@macbook ~]# ls -lh /mnt/test/
+total 0
+
+
+▲▲▲スナップ無し
+NAME=thick_random_1st
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 128M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+
+
+▲▲▲スナップ１つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_1 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_1" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+NAME=thick_random_2nd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 256M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:34 thick_random_2nd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+20260311.043412.thick_random_2nd.randwrite.txt: BW=3628KiB/s
+20260311.043456.thick_random_2nd.randread.txt: BW=151MiB/s
+
+
+▲▲▲スナップ２つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_2 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_2" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 0.64
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+NAME=thick_random_3rd
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 384M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:34 thick_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:37 thick_random_3rd.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+20260311.043412.thick_random_2nd.randwrite.txt: BW=3628KiB/s
+20260311.043456.thick_random_2nd.randread.txt: BW=151MiB/s
+20260311.043627.thick_random_3rd.randwrite.txt: BW=2505KiB/s
+20260311.043729.thick_random_3rd.randread.txt: BW=138MiB/s
+
+
+▲▲▲スナップ３つ
+
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_3 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_3" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 1.27
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 0.63
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+NAME=thick_random_4th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 512M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:34 thick_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:37 thick_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:40 thick_random_4th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+20260311.043412.thick_random_2nd.randwrite.txt: BW=3628KiB/s
+20260311.043456.thick_random_2nd.randread.txt: BW=151MiB/s
+20260311.043627.thick_random_3rd.randwrite.txt: BW=2505KiB/s
+20260311.043729.thick_random_3rd.randread.txt: BW=138MiB/s
+20260311.043858.thick_random_4th.randwrite.txt: BW=1865KiB/s
+20260311.044013.thick_random_4th.randread.txt: BW=135MiB/s
+
+
+▲▲▲スナップ４つ
+[root@macbook ~]# lvcreate --snapshot --size 20G --name lv_apple_ss_4 /dev/vg_apple/lv_apple
+  Logical volume "lv_apple_ss_4" created.
+[root@macbook ~]# lvs vg_apple
+  LV            VG       Attr       LSize  Pool Origin   Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple      vg_apple owi-aos--- 20.00g
+  lv_apple_ss_1 vg_apple swi-a-s--- 20.00g      lv_apple 1.91
+  lv_apple_ss_2 vg_apple swi-a-s--- 20.00g      lv_apple 1.27
+  lv_apple_ss_3 vg_apple swi-a-s--- 20.00g      lv_apple 0.64
+  lv_apple_ss_4 vg_apple swi-a-s--- 20.00g      lv_apple 0.00
+
+
+NAME=thick_random_5th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 640M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:34 thick_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:37 thick_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:40 thick_random_4th.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:46 thick_random_5th.0.0
+
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+20260311.043412.thick_random_2nd.randwrite.txt: BW=3628KiB/s
+20260311.043456.thick_random_2nd.randread.txt: BW=151MiB/s
+20260311.043627.thick_random_3rd.randwrite.txt: BW=2505KiB/s
+20260311.043729.thick_random_3rd.randread.txt: BW=138MiB/s
+20260311.043858.thick_random_4th.randwrite.txt: BW=1865KiB/s
+20260311.044013.thick_random_4th.randread.txt: BW=135MiB/s
+20260311.044506.thick_random_5th.randwrite.txt: BW=1638KiB/s
+20260311.044629.thick_random_5th.randread.txt: BW=151MiB/s
+
+
+▲▲▲スナップ無し
+[root@macbook ~]# lvremove vg_apple/lv_apple_ss_1 vg_apple/lv_apple_ss_2 vg_apple/lv_apple_ss_3 vg_apple/lv_apple_ss_4
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_1? [y/n]: y
+  Logical volume "lv_apple_ss_1" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_2? [y/n]: y
+  Logical volume "lv_apple_ss_2" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_3? [y/n]: y
+  Logical volume "lv_apple_ss_3" successfully removed.
+Do you really want to remove active logical volume vg_apple/lv_apple_ss_4? [y/n]: y
+  Logical volume "lv_apple_ss_4" successfully removed.
+[root@macbook ~]# lvs vg_apple
+  LV       VG       Attr       LSize  Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  lv_apple vg_apple -wi-ao---- 20.00g
+[root@macbook ~]#
+
+NAME=thick_random_6th
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randwrite --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randwrite.txt;     echo $?
+fio --name=$NAME --ioengine=libaio --direct=1 --directory=/mnt/test --size=128m --bs=4k   --readwrite=randread  --iodepth=8 > ~/$(date +%Y%m%d.%H%M%S).$NAME.randread.txt;      echo $?
+
+[root@macbook ~]# ls -lh /mnt/test/
+total 768M
+-rw-r--r--. 1 root root 128M Mar 11 04:31 thick_random_1st.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:34 thick_random_2nd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:37 thick_random_3rd.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:40 thick_random_4th.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:46 thick_random_5th.0.0
+-rw-r--r--. 1 root root 128M Mar 11 04:48 thick_random_6th.0.0
+
+[root@macbook ~]# egrep 'write:|read:' *txt | awk '{print $1,$4}'
+20260311.043149.thick_random_1st.randwrite.txt: BW=94.6MiB/s
+20260311.043157.thick_random_1st.randread.txt: BW=174MiB/s
+20260311.043412.thick_random_2nd.randwrite.txt: BW=3628KiB/s
+20260311.043456.thick_random_2nd.randread.txt: BW=151MiB/s
+20260311.043627.thick_random_3rd.randwrite.txt: BW=2505KiB/s
+20260311.043729.thick_random_3rd.randread.txt: BW=138MiB/s
+20260311.043858.thick_random_4th.randwrite.txt: BW=1865KiB/s
+20260311.044013.thick_random_4th.randread.txt: BW=135MiB/s
+20260311.044506.thick_random_5th.randwrite.txt: BW=1638KiB/s
+20260311.044629.thick_random_5th.randread.txt: BW=151MiB/s
+20260311.044820.thick_random_6th.randwrite.txt: BW=90.6MiB/s
+20260311.044829.thick_random_6th.randread.txt: BW=177MiB/s
+
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
+
+▲▲▲
